@@ -288,6 +288,7 @@ function pedirTexto(titulo, rotuloCampo, rotuloAcao, tipoCampo = "text") {
 /* ===================== ACESSO AO SERVIDOR ===================== */
 const Api = (() => {
   const K = CFG.pref + "sessao";
+  let somenteLeitura = false;
   let sess = null;
   try { sess = JSON.parse(localStorage.getItem(K) || "null"); } catch (e) { sess = null; }
   const guardarSess = s => { sess = s; try { s ? localStorage.setItem(K, JSON.stringify(s)) : localStorage.removeItem(K); } catch (e) { /* ok */ } };
@@ -314,6 +315,7 @@ const Api = (() => {
     }
   }
   async function chamar(caminho, { metodo = "GET", corpo, cab = {}, semToken = false } = {}, repetir = true) {
+    if (somenteLeitura && metodo !== "GET" && !/^\/auth\/v1\/(token|logout)/.test(caminho)) throw new Error("Modo Ver como: só visualização. Volte ao modo administrador para fazer alterações.");
     const h = { apikey: CFG.chave, ...cab };
     if (corpo !== undefined) h["Content-Type"] = "application/json";
     if (!semToken && sess) {
@@ -343,6 +345,7 @@ const Api = (() => {
   return {
     get logado() { return !!sess; },
     get uid() { return sess && sess.uid; },
+    set somenteLeitura(v) { somenteLeitura = !!v; },
     ler, listar,
     inserir: async (t, corpo, query, prefer = "return=representation") => (await chamar(`/rest/v1/${t}${query ? "?" + qs(query) : ""}`, { metodo: "POST", corpo, cab: { Prefer: prefer } })).dados,
     alterar: async (t, filtros, corpo) => (await chamar(`/rest/v1/${t}?${qs(filtros)}`, { metodo: "PATCH", corpo, cab: { Prefer: "return=representation" } })).dados || [],
@@ -367,7 +370,8 @@ const FILTRO_BASE = { campo: "data_prevista", periodo: "hoje", de: "", ate: "", 
 F.painel = { ...FILTRO_BASE, ...(F.painel || {}) };
 F.kanban = { ...FILTRO_BASE, periodo: "todos", status: "todos", ...(F.kanban || {}) };
 const salvarFiltros = () => pref.gravar("filtros", F);
-const admin = () => !!S.eu && S.eu.papel === "admin";
+const admin = () => S.verComo ? S.verComo.papel === "admin" : (!!S.eu && S.eu.papel === "admin");
+const uidEf = () => S.verComo ? S.verComo.id : Api.uid;
 const nomeDe = id => { const u = S.usuarios.find(x => x.id === id); return u ? u.nome : "—"; };
 const quadroAtual = () => S.quadros.find(q => q.id === S.quadroId);
 const areaDe = id => S.todosQuadros.find(q => q.id === id) || S.quadros.find(q => q.id === id);
@@ -437,7 +441,7 @@ function passa(c, f, hoje) {
   if (f.tipo && (areaDe(c.quadro_id) || {}).usa_financeiro && c.tipo !== f.tipo) return false;
   if (f.categoria === "__sem") { if (c.categoria_id) return false; }
   else if (f.categoria && categoriasArea(c.quadro_id).some(x => x.id === f.categoria) && c.categoria_id !== f.categoria) return false;
-  if (f.resp && !(S.resp.get(c.id) || []).includes(f.resp === "__eu" ? Api.uid : f.resp)) return false;
+  if (f.resp && !(S.resp.get(c.id) || []).includes(f.resp === "__eu" ? uidEf() : f.resp)) return false;
   if (f.busca && !((c.titulo + " " + (c.empresa || "")).toLowerCase().includes(f.busca.toLowerCase()))) return false;
   const d = c[f.campo];
   switch (f.periodo) {
@@ -627,7 +631,7 @@ function ordemAgenda(a, b) {
   return a.titulo.localeCompare(b.titulo, "pt-BR");
 }
 function itensAgenda(de, ate) {
-  const alvo = FA.resp === "__eu" ? Api.uid : FA.resp;
+  const alvo = FA.resp === "__eu" ? uidEf() : FA.resp;
   return S.cartoes.filter(c => !c.arquivado && c.data_prevista && c.data_prevista >= de && c.data_prevista <= ate &&
     (!FA.area || c.quadro_id === FA.area) && (FA.concl || c.status !== "concluido") &&
     (!alvo || (S.resp.get(c.id) || []).includes(alvo))).sort(ordemAgenda);
@@ -698,7 +702,7 @@ views.areas = () => {
 };
 async function carregarAreas() {
   const q = await Api.ler("quadros", { select: "*", order: "ordem.asc,nome.asc" });
-  S.todosQuadros = q; S.quadros = q.filter(x => x.ativo !== false);
+  S.todosQuadros = q; S.quadros = q.filter(x => x.ativo !== false && (!S.verComo || S.verComo.papel === "admin" || S.verComo.meus.has(x.id)));
   if (!S.quadros.some(x => x.id === S.quadroId)) S.quadroId = S.quadros[0] ? S.quadros[0].id : null;
 }
 function novaArea() {
@@ -795,11 +799,11 @@ views.usuarios = async () => {
     <td><select data-u="papel" data-id="${esc(u.id)}" aria-label="Papel de ${esc(u.usuario)}">${opt("usuario", "Usuário", u.papel)}${opt("admin", "Administrador", u.papel)}</select></td>
     <td><label class="inline"><input type="checkbox" data-u="ativo" data-id="${esc(u.id)}" ${u.ativo ? "checked" : ""}> Ativo</label></td>
     <td><button type="button" class="small" data-acao="usr-senha" data-id="${esc(u.id)}">Nova senha</button></td>
-    <td><button type="button" class="small" data-acao="usr-acessos" data-id="${esc(u.id)}">Acessos</button> <span class="muted">${u.papel === "admin" ? "todas" : membros.filter(m => m.usuario_id === u.id).length + " de " + S.todosQuadros.length}</span></td>
+    <td><button type="button" class="small" data-acao="usr-acessos" data-id="${esc(u.id)}">Acessos</button> <button type="button" class="small" data-acao="usr-ver" data-id="${esc(u.id)}" title="Ver o aplicativo como esta pessoa vê">Ver como</button> <span class="muted">${u.papel === "admin" ? "todas" : membros.filter(m => m.usuario_id === u.id).length + " de " + S.todosQuadros.length}</span></td>
   </tr>`).join("");
   return cabecalho("Usuários", "Quem pode entrar e o que cada um acessa. Quem está inativo perde o acesso na hora, e o histórico dele continua guardado.", `<button type="button" class="primary" data-acao="usr-novo">Novo usuário</button>`) +
     `<div class="panel tabela"><table><thead><tr><th>Usuário</th><th>Nome</th><th>Papel</th><th>Situação</th><th>Senha</th><th>Áreas</th></tr></thead><tbody>${linhas}</tbody></table>
-      <p class="muted" style="margin:.75rem 0 0">Administrador acessa todas as áreas. Nome, papel e situação valem assim que você altera. Em Acessos você marca o que cada pessoa pode fazer em cada área.</p></div>
+      <p class="muted" style="margin:.75rem 0 0">Administrador acessa todas as áreas. Nome, papel e situação valem assim que você altera. Em Acessos você marca o que cada pessoa pode fazer em cada área. Em Ver como você abre o aplicativo do jeito que ela vê, só para visualizar.</p></div>
     <div class="panel"><h2>Como entregar o acesso</h2>
       <p style="margin:0">Use <b>Novo usuário</b>: o sistema cria o login, libera as áreas e gera uma mensagem pronta com o link, o usuário e a senha para você enviar à pessoa. No primeiro acesso ela é obrigada a trocar a senha. Para encerrar um acesso, desmarque <b>Ativo</b>.</p></div>`;
 };
@@ -832,6 +836,21 @@ function abrirAcessos(id) {
       fechar(); aviso("Acessos salvos."); render();
     } catch (e) { $("#ac-erro").textContent = e.message; sv.disabled = false; sv.textContent = "Salvar acessos"; }
   };
+}
+
+async function verComo(id) {
+  const u = S.usuarios.find(x => x.id === id); if (!u) return;
+  const m = (S.membrosUsr || []).filter(x => x.usuario_id === id);
+  S.meusReal = S.meus;
+  S.verComo = { id, nome: u.nome, usuario: u.usuario, papel: u.papel, ativo: u.ativo, meus: new Map(m.map(x => [x.quadro_id, x.papel])) };
+  S.meus = S.verComo.meus; Api.somenteLeitura = true;
+  try { await carregarAreas(); await carregarQuadro(); } catch (e) { await sairVerComo(); erro(e); return; }
+  montarShell(); location.hash = "#/painel"; render();
+}
+async function sairVerComo() {
+  S.verComo = null; if (S.meusReal) S.meus = S.meusReal; S.meusReal = null; Api.somenteLeitura = false;
+  try { await carregarAreas(); await carregarQuadro(); } catch (e) { erro(e); }
+  montarShell(); location.hash = "#/usuarios"; render();
 }
 
 const FUNCAO_USUARIOS = "clever-endpoint";
@@ -1369,7 +1388,7 @@ function montarShell() {
     <a href="#/agenda" data-rota="agenda">Agenda</a>
     <a href="#/conferir" data-rota="conferir">Conferir importados</a>
     ${a ? `<div class="side-grupo">Administração</div><a href="#/lixeira" data-rota="lixeira">Lixeira</a><a href="#/usuarios" data-rota="usuarios">Usuários</a><a href="#/areas" data-rota="areas">Áreas e campos</a><a href="#/importar" data-rota="importar">Importar do Trello</a><a href="#/backup" data-rota="backup">Backup</a>` : ""}
-    <div class="side-fim"><span class="muted">${esc(S.eu.nome)}</span>${instalado ? "" : `<button type="button" class="small" data-acao="instalar">Instalar no celular</button>`}<button type="button" class="small" data-acao="senha">Trocar senha</button><button type="button" class="small" data-acao="sair">Sair</button></div>
+    <div class="side-fim"><span class="muted">${esc(S.verComo ? S.verComo.nome : S.eu.nome)}</span>${instalado ? "" : `<button type="button" class="small" data-acao="instalar">Instalar no celular</button>`}<button type="button" class="small" data-acao="senha">Trocar senha</button><button type="button" class="small" data-acao="sair">Sair</button></div>
   </nav><main id="tela" tabindex="-1"></main></div>`;
 }
 async function render() {
@@ -1384,7 +1403,7 @@ async function render() {
   const precisaArea = ["painel", "kanban", "conferir", "agenda"].includes(nome);
   try { html = (precisaArea && !S.quadros.length) ? `<div class="vazio">Você ainda não tem acesso a nenhuma área. Peça ao administrador para liberar.</div>` : await views[nome](); } catch (e) { erro(e); html = `<div class="vazio">Não foi possível carregar esta tela.</div>`; }
   if (meu !== tokenRender) return;
-  const banner = S.eu.trocar_senha ? `<div class="banner"><span>Sua senha é provisória.</span><button type="button" class="small" data-acao="senha">Trocar agora</button></div>` : "";
+  const banner = S.verComo ? `<div class="banner" style="position:sticky;top:0;z-index:30;background:#8a4b00;color:#fff;border-color:#8a4b00"><span>Você está vendo o aplicativo como <b>${esc(S.verComo.nome)}</b> (${esc(S.verComo.usuario)})${S.verComo.ativo ? "" : " — usuário inativo"}. Somente visualização: nada é gravado.</span><button type="button" class="small" data-acao="ver-sair">Voltar ao modo administrador</button></div>` : S.eu.trocar_senha ? `<div class="banner"><span>Sua senha é provisória.</span><button type="button" class="small" data-acao="senha">Trocar agora</button></div>` : "";
   tela.innerHTML = banner + html;
   if (foco) { const el = document.getElementById(foco); if (el && "value" in el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) { /* campo sem cursor */ } } }
 }
@@ -1428,6 +1447,8 @@ document.addEventListener("click", async ev => {
   else if (a === "usr-novo") novoUsuario();
   else if (a === "usr-senha") novaSenhaUsuario(id);
   else if (a === "usr-acessos") abrirAcessos(id);
+  else if (a === "usr-ver") verComo(id);
+  else if (a === "ver-sair") sairVerComo();
   else if (a === "ag-nav") agNav(Number(el.dataset.d));
   else if (a === "ag-hoje") { FA.ref = hojeBR(); render(); }
   else if (a === "ag-modo") { FA.modo = el.dataset.valor; salvarAgenda(); render(); }
