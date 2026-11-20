@@ -1,0 +1,1596 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MINASG GPS - Gestão de Processos e Serviços</title>
+<meta name="theme-color" content="#1f5f8b">
+<meta name="description" content="Gestão de processos e serviços da produção e do escritório.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="MINASG GPS">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<style>
+:root{
+  --bg:#f2f4f6; --surface:#ffffff; --text:#1b2128; --muted:#5a6572; --line:#d8dde3;
+  --accent:#1f5f8b; --accent-text:#ffffff; --accent-soft:#e2eef6;
+  --danger:#b3261e; --danger-soft:#fbe9e7; --ok:#1e7a46; --ok-soft:#e1f2e8; --warn:#7a5200; --warn-soft:#fcefd0;
+  --radius:6px; --font:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#13171c; --surface:#1c2229; --text:#e5e9ed; --muted:#9aa5b1; --line:#2f3842;
+    --accent:#6db3e0; --accent-text:#0b1722; --accent-soft:#1c2e3c;
+    --danger:#ff8a80; --danger-soft:#3b1f1d; --ok:#6fd39b; --ok-soft:#173026; --warn:#f0c36a; --warn-soft:#3a2f14;
+  }
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 var(--font)}
+h1{font-size:1.4rem;margin:0 0 .15rem}
+h2{font-size:1.05rem;margin:0 0 .6rem}
+h3{font-size:.95rem;margin:0 0 .4rem}
+p{margin:0 0 .75rem}
+.muted{color:var(--muted)}
+.n{font-variant-numeric:tabular-nums;text-align:right}
+.app{display:grid;grid-template-columns:230px 1fr;min-height:100%}
+.side{background:var(--surface);border-right:1px solid var(--line);padding:1rem .75rem;display:flex;flex-direction:column;gap:.25rem;position:sticky;top:0;height:100vh;overflow:auto}
+.brand{display:flex;align-items:center;gap:.6rem;padding:.25rem .5rem .75rem}
+.brand svg{width:36px;height:36px;flex:none}
+.brand b{display:block;line-height:1.1;font-size:1.05rem;letter-spacing:.02em}
+.brand small{display:block;color:var(--muted);font-size:.72rem;line-height:1.25;font-weight:400}
+.side a{display:block;padding:.5rem .75rem;border-radius:var(--radius);color:var(--text);text-decoration:none}
+.side a:hover{background:var(--accent-soft)}
+.side a[aria-current="page"]{background:var(--accent);color:var(--accent-text);font-weight:600}
+.side-grupo{font-size:.8rem;color:var(--muted);padding:.75rem .75rem .15rem}
+.side-fim{margin-top:auto;padding-top:1rem;display:flex;flex-direction:column;gap:.4rem}
+main{padding:1.25rem 1.5rem;min-width:0}
+.head{display:flex;align-items:flex-end;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:.9rem}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:1rem;margin-bottom:.9rem}
+button,.btn{font:inherit;padding:.45rem .85rem;border-radius:var(--radius);border:1px solid var(--line);background:var(--surface);color:var(--text);cursor:pointer;min-height:40px}
+button:hover:not(:disabled){border-color:var(--accent)}
+button:disabled{opacity:.5;cursor:default}
+button.primary{background:var(--accent);color:var(--accent-text);border-color:var(--accent);font-weight:600}
+button.danger{color:var(--danger)}
+button.small{min-height:32px;padding:.2rem .6rem;font-size:.9rem}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+input,select,textarea{font:inherit;width:100%;padding:.45rem .6rem;border:1px solid var(--line);border-radius:var(--radius);background:var(--bg);color:var(--text);min-height:40px}
+input[type=checkbox]{width:auto;min-height:0}
+textarea{resize:vertical}
+label{display:block;font-weight:600;margin-bottom:.2rem;font-size:.92rem}
+label.inline{display:inline-flex;gap:.4rem;align-items:center;font-weight:400;margin:0}
+.field{margin-bottom:.8rem}
+.erro-campo{color:var(--danger);font-size:.85rem;min-height:1.1em}
+.vazio{padding:2rem 1rem;text-align:center;color:var(--muted)}
+.chips{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.9rem}
+.chip{display:flex;flex-direction:column;align-items:flex-start;gap:0;padding:.4rem .9rem;border:1px solid var(--line);background:var(--surface);border-radius:var(--radius);min-width:120px}
+.chip b{font-size:1.35rem;font-variant-numeric:tabular-nums}
+.chip.atras b{color:var(--danger)}
+.chip[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.filtros .f-linha{display:flex;gap:.75rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:.6rem}
+.filtros .f-linha:last-child{margin-bottom:0}
+.filtros .field{margin:0;min-width:140px;flex:1 1 140px}
+.seg{display:flex;flex-wrap:wrap;gap:.3rem}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);border-color:var(--accent);font-weight:600}
+.dia{margin-bottom:1rem}
+.dia-cab{display:flex;justify-content:space-between;gap:1rem;align-items:baseline;padding:.3rem .2rem;border-bottom:2px solid var(--line);margin-bottom:.3rem}
+.dia-cab b{font-size:1rem}
+.dia-cab.atras b{color:var(--danger)}
+.linha{display:grid;grid-template-columns:auto 1fr auto auto;gap:.6rem;align-items:center;padding:.3rem .2rem;border-bottom:1px solid var(--line)}
+.linha .abrir{text-align:left;border:0;background:transparent;padding:.2rem .3rem;min-height:40px;display:block;width:100%}
+.linha .abrir:hover{background:var(--accent-soft)}
+.linha .t{font-weight:600;display:block}
+.linha .m{color:var(--muted);font-size:.85rem;display:block}
+.linha.feito .t{text-decoration:line-through;color:var(--muted)}
+.ck{width:34px;height:34px;border-radius:50%;padding:0;min-height:34px;line-height:1}
+.tag{display:inline-block;padding:0 .5rem;border-radius:99px;font-size:.78rem;border:1px solid var(--line);background:var(--bg);white-space:nowrap}
+.t-pagar{background:var(--accent-soft);border-color:transparent;color:var(--accent)}
+.t-receber{background:var(--ok-soft);border-color:transparent;color:var(--ok)}
+.t-alerta{background:var(--warn-soft);border-color:transparent;color:var(--warn)}
+.t-perigo{background:var(--danger-soft);border-color:transparent;color:var(--danger)}
+.totais{display:flex;gap:1.25rem;flex-wrap:wrap;padding:.6rem .2rem;font-variant-numeric:tabular-nums}
+.kanban{display:grid;grid-template-columns:repeat(4,minmax(260px,1fr));gap:.75rem;overflow-x:auto;align-items:start;padding-bottom:.5rem}
+.kcol{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:.6rem;min-height:140px}
+.kcol.sobre{outline:3px dashed var(--accent)}
+.kcol h2{display:flex;justify-content:space-between;gap:.5rem;font-size:.98rem}
+.kcard{border:1px solid var(--line);border-left:4px solid var(--line);border-radius:var(--radius);background:var(--bg);padding:.4rem .5rem;margin-bottom:.45rem;cursor:grab}
+.kcard.atras{border-left-color:var(--danger)}
+.kcard .kabrir{display:block;width:100%;text-align:left;border:0;background:transparent;padding:0;min-height:0;font-weight:600}
+.kcard .kmeta{display:flex;justify-content:space-between;gap:.4rem;align-items:center;margin-top:.25rem;font-size:.85rem;color:var(--muted)}
+.tabela{overflow-x:auto}
+table{border-collapse:collapse;width:100%}
+th,td{padding:.45rem .55rem;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-size:.85rem;color:var(--muted);font-weight:600;white-space:nowrap}
+td.n,th.n{text-align:right}
+.barra-lote{position:sticky;top:0;z-index:3;display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;background:var(--accent-soft);border:1px solid var(--accent);border-radius:var(--radius);padding:.5rem .75rem;margin-bottom:.75rem}
+.banner{background:var(--warn-soft);color:var(--warn);border-radius:var(--radius);padding:.5rem .75rem;margin-bottom:.9rem;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap}
+dialog{border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);color:var(--text);padding:1.1rem;width:min(480px,94vw);max-height:92vh;overflow:auto}
+dialog.larga{width:min(820px,96vw)}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+.rodape-dialogo{display:flex;justify-content:flex-end;gap:.5rem;margin-top:1rem;flex-wrap:wrap}
+.grade2{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+.grade3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem}
+.bloco{border-top:1px solid var(--line);padding-top:.75rem;margin-top:.9rem}
+.datas-lin{display:flex;justify-content:space-between;align-items:center;gap:.5rem;padding:.3rem 0;border-bottom:1px solid var(--line)}
+.hist{list-style:none;margin:0;padding:0;font-size:.9rem}
+.hist li{padding:.35rem 0;border-bottom:1px solid var(--line)}
+.checks{display:flex;gap:.4rem 1rem;flex-wrap:wrap}
+.bolinha{display:inline-block;width:.8rem;height:.8rem;border-radius:50%;border:1px solid var(--line);vertical-align:-1px}
+.login{max-width:360px;margin:12vh auto 0;padding:0 1rem}
+#avisos{position:fixed;right:1rem;bottom:1rem;display:flex;flex-direction:column;gap:.5rem;z-index:50}
+.aviso{background:var(--text);color:var(--bg);padding:.6rem .9rem;border-radius:var(--radius);max-width:340px}
+.aviso.erro{background:var(--danger);color:#fff}
+.sr{position:absolute;left:-9999px}
+@media (pointer:coarse){.kcard{touch-action:pan-x pan-y;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}}
+.kcard.arrastando{opacity:.35}
+.ghost{position:fixed;left:0;top:0;z-index:100;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.35);opacity:.96;margin:0;cursor:grabbing}
+.dropbar{position:fixed;left:0;right:0;bottom:0;z-index:90;display:flex;gap:.5rem;padding:.6rem .75rem calc(.6rem + env(safe-area-inset-bottom));background:var(--surface);border-top:2px solid var(--accent)}
+.dropbtn{flex:1;text-align:center;padding:1rem .25rem;border:2px dashed var(--line);border-radius:var(--radius);font-weight:600;background:var(--bg)}
+.dropbtn.sobre{border-color:var(--accent);background:var(--accent-soft)}
+body.arrastando-cartao{overscroll-behavior:none}
+.ag-barra{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.ag-dia{margin-bottom:.9rem}
+.ag-cab{display:flex;justify-content:space-between;align-items:center;gap:.6rem;border-bottom:2px solid var(--line);padding:.3rem .2rem;margin-bottom:.2rem}
+.ag-cab.hoje b{color:var(--accent)}
+.ag-cab .muted{margin-left:auto}
+.ag-item{display:grid;grid-template-columns:104px 1fr;gap:.5rem;border-bottom:1px solid var(--line);align-items:start}
+.ag-item .abrir{text-align:left;border:0;background:transparent;padding:.2rem .3rem;min-height:40px;display:block;width:100%}
+.ag-item .abrir:hover{background:var(--accent-soft)}
+.ag-item .t{font-weight:600;display:block}.ag-item .m{color:var(--muted);font-size:.85rem;display:block}
+.ag-hora{font-variant-numeric:tabular-nums;font-weight:600;padding:.55rem .3rem;color:var(--accent)}
+.ag-item.feito .t{text-decoration:line-through;color:var(--muted)}
+.mes{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line)}
+.mes .cab-d{background:var(--surface);padding:.3rem;text-align:center;font-size:.8rem;color:var(--muted)}
+.mes .cel{background:var(--surface);min-height:104px;padding:.2rem;overflow:hidden}
+.mes .cel.fora{background:var(--bg);color:var(--muted)}
+.mes .num{border:0;background:transparent;min-width:28px;min-height:28px;padding:0 .3rem;border-radius:99px;font-weight:600}
+.mes .cel.hoje .num{background:var(--accent);color:var(--accent-text)}
+.mes .chip-ag{display:block;width:100%;text-align:left;font-size:.75rem;padding:1px 4px;margin-top:2px;border-radius:3px;background:var(--accent-soft);color:var(--text);border:0;min-height:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mes .chip-ag.feito{opacity:.55;text-decoration:line-through}
+.mes .mais{font-size:.72rem;color:var(--muted);padding-left:4px}
+.mes .conta{display:none;margin-left:.2rem;padding:0 .4rem;border-radius:99px;background:var(--accent);color:var(--accent-text);font-size:.75rem;font-weight:600}
+.filtros-det>summary{cursor:pointer;font-weight:600;padding:.5rem .2rem;min-height:40px;margin-bottom:.4rem}
+.filtros-det[open]>summary{margin-bottom:.2rem}
+.campo-lin{display:grid;grid-template-columns:1.4fr 150px 1.6fr auto;gap:.4rem;align-items:center;margin-bottom:.45rem}
+@media (max-width:820px){
+  .kanban{grid-template-columns:repeat(4,80vw)}
+  .campo-lin{grid-template-columns:1fr;padding-bottom:.5rem;border-bottom:1px solid var(--line)}
+  .ag-item{grid-template-columns:78px 1fr}
+  .mes .cel{min-height:62px}.mes .chip-ag,.mes .mais{display:none}.mes .conta{display:inline-block}
+}
+@media (max-width:820px){
+  .app{grid-template-columns:1fr}
+  .side{position:static;height:auto;flex-direction:row;flex-wrap:wrap;border-right:0;border-bottom:1px solid var(--line);padding:.5rem}
+  .brand{width:100%;padding:.2rem .5rem}
+  .side-fim{flex-direction:row;margin-top:0;padding-top:0;width:100%;align-items:center}
+  .side-grupo{display:none}
+  main{padding:.9rem}
+  .grade2,.grade3{grid-template-columns:1fr}
+  .linha{grid-template-columns:auto 1fr auto}
+  .linha .tag{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@media print{.side,button,#avisos,.filtros{display:none!important}.app{display:block}body{background:#fff;color:#000}}
+</style>
+</head>
+<body>
+<div id="raiz"></div>
+<div id="avisos" aria-live="polite"></div>
+<dialog id="dlg"></dialog>
+<dialog id="dlg2"></dialog>
+<noscript>Este aplicativo precisa de JavaScript.</noscript>
+
+<script>
+"use strict";
+
+/* ===================== CONFIGURAÇÃO ===================== */
+const CFG = {
+  url: "https://focaombqqrecvjbdhpop.supabase.co",
+  chave: "sb_publishable_3hgGLjrYk_zGE8wY6yfDwQ_0vAhoH5k", // chave pública: pode ficar no HTML
+  dominio: "kanban.interno",
+  atualizarACada: 30000,
+  pref: "kanban-fin:"
+};
+const STATUS = { backlog: "Backlog", a_fazer: "A fazer", em_andamento: "Em andamento", concluido: "Concluído" };
+const STATUS_ORDEM = ["backlog", "a_fazer", "em_andamento", "concluido"];
+const TIPOS = { pagar: "A pagar", receber: "A receber", tarefa: "Tarefa" };
+const MOTIVOS = ["Negociação com fornecedor", "Falta de saldo", "A pedido do fornecedor", "Aguardando recebimento", "Erro de lançamento", "Feriado ou dia sem expediente"];
+const ALERTAS = {
+  sem_data: "Sem data", sem_vencimento_usou_lista: "Data veio do nome da lista do Trello",
+  vencimento_diverge_lista: "Vencimento diferente da data da lista", vencimento_avancado_pela_recorrencia: "Data avançada pela recorrência",
+  dia_semana_da_lista_diverge: "Dia da semana da lista não bate com a data", data_ano_suspeito: "Ano suspeito na data",
+  sem_valor: "Sem valor", valor_formato_incomum: "Valor digitado fora do padrão", valor_ambiguo: "Valor ambíguo (veja o sugerido)",
+  status_conflitante: "Situação conflitante", concluido_sem_data_conclusao: "Concluído sem data de conclusão",
+  tipo_receber_inferido: "Tipo \"a receber\" deduzido do título", empresa_inferida_do_titulo: "Empresa deduzida do título",
+  comentario_nao_exportado: "Tinha comentários no Trello que não vieram", anexo_baixar_manual: "Tinha anexo no Trello",
+  possivel_duplicado: "Possível duplicado", aberto_mas_arquivado_no_trello: "Aberto, mas arquivado no Trello"
+};
+const COLUNAS_CARTAO = "id,quadro_id,categoria_id,id_curto,titulo,tipo,empresa,valor,valor_sugerido,status,data_inicio,data_prevista,data_conclusao,ultima_conclusao,hora_prevista,hora_fim,campos,conferido,alertas,arquivado,versao,recorrencia,criado_em,atualizado_em,lista_origem:dados_origem->>lista_origem";
+
+/* ===================== UTILIDADES ===================== */
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const brl = n => (n === null || n === undefined || n === "") ? "—" : new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(n));
+const dataBR = iso => iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : "";
+const dataCurta = iso => iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : "";
+const DIAS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+const dowIso = iso => new Date(iso + "T00:00:00Z").getUTCDay();
+const hojeBR = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+const somarDias = (iso, n) => { const d = new Date(iso + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const inicioSemana = iso => somarDias(iso, -((dowIso(iso) + 6) % 7));
+const fimSemana = iso => somarDias(inicioSemana(iso), 6);
+const inicioMes = iso => iso.slice(0, 8) + "01";
+const fimMes = iso => { const [y, m] = iso.split("-").map(Number); return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10); };
+const diasEntre = (a, b) => Math.round((new Date(b + "T00:00:00Z") - new Date(a + "T00:00:00Z")) / 86400000);
+const pl = (n, s, p) => `${n} ${n === 1 ? s : p}`;
+const cent = v => Math.round((Number(v) || 0) * 100);
+const horaBR = iso => iso ? new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
+const opt = (valor, rotulo, sel) => `<option value="${esc(valor)}"${String(sel) === String(valor) ? " selected" : ""}>${esc(rotulo)}</option>`;
+const alertaTxt = c => ALERTAS[c] || c;
+const ehAtrasado = (c, hoje) => c.status !== "concluido" && !!c.data_prevista && c.data_prevista < hoje;
+
+function lerValor(txt) {
+  let t = String(txt ?? "").trim().replace(/[R$\s]/g, "");
+  if (!t) return null;
+  if (t.includes(",")) t = t.replace(/\./g, "").replace(",", ".");
+  else if (/^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, "");
+  const n = Number(t);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : NaN;
+}
+const valorTxt = v => (v === null || v === undefined) ? "" : Number(v).toFixed(2).replace(".", ",");
+
+function aviso(msg, tipo) {
+  const el = document.createElement("div");
+  el.className = "aviso" + (tipo === "erro" ? " erro" : "");
+  el.textContent = msg;
+  $("#avisos").appendChild(el);
+  setTimeout(() => el.remove(), tipo === "erro" ? 7000 : 3000);
+}
+const pref = {
+  ler(k, padrao) { try { const v = localStorage.getItem(CFG.pref + k); return v === null ? padrao : JSON.parse(v); } catch (e) { return padrao; } },
+  gravar(k, v) { try { localStorage.setItem(CFG.pref + k, JSON.stringify(v)); } catch (e) { /* sem armazenamento: segue sem lembrar */ } }
+};
+
+/* ===================== DIÁLOGOS ===================== */
+const dlg = $("#dlg"), dlg2 = $("#dlg2");
+function abrir(html, larga) { dlg.className = larga ? "larga" : ""; dlg.innerHTML = html; if (!dlg.open) dlg.showModal(); }
+function fechar() { if (dlg.open) dlg.close(); }
+function abrir2(html) { dlg2.innerHTML = html; if (!dlg2.open) dlg2.showModal(); }
+function fechar2() { if (dlg2.open) dlg2.close(); }
+function confirmar(msg, rotulo = "Confirmar", perigo = true) {
+  return new Promise(res => {
+    let feito = false;
+    const fim = v => { if (feito) return; feito = true; fechar2(); res(v); };
+    abrir2(`<p>${esc(msg)}</p><div class="rodape-dialogo"><button type="button" id="c-nao">Cancelar</button><button type="button" id="c-sim" class="primary${perigo ? " danger" : ""}">${esc(rotulo)}</button></div>`);
+    $("#c-nao").onclick = () => fim(false);
+    $("#c-sim").onclick = () => fim(true);
+    dlg2.oncancel = () => fim(false);
+    $("#c-nao").focus();
+  });
+}
+function pedirTexto(titulo, rotuloCampo, rotuloAcao, tipoCampo = "text") {
+  return new Promise(res => {
+    let feito = false;
+    const fim = v => { if (feito) return; feito = true; fechar2(); res(v); };
+    abrir2(`<form id="pt-form" novalidate><h2>${esc(titulo)}</h2><div class="field"><label for="pt-v">${esc(rotuloCampo)}</label><input id="pt-v" type="${tipoCampo}"></div>
+      <div class="rodape-dialogo"><button type="button" id="pt-nao">Cancelar</button><button type="submit" class="primary">${esc(rotuloAcao)}</button></div></form>`);
+    $("#pt-v").focus();
+    $("#pt-nao").onclick = () => fim(null);
+    $("#pt-form").onsubmit = ev => { ev.preventDefault(); fim($("#pt-v").value); };
+    dlg2.oncancel = () => fim(null);
+  });
+}
+
+/* ===================== ACESSO AO SERVIDOR ===================== */
+const Api = (() => {
+  const K = CFG.pref + "sessao";
+  let sess = null;
+  try { sess = JSON.parse(localStorage.getItem(K) || "null"); } catch (e) { sess = null; }
+  const guardarSess = s => { sess = s; try { s ? localStorage.setItem(K, JSON.stringify(s)) : localStorage.removeItem(K); } catch (e) { /* ok */ } };
+  const aPartirDe = d => guardarSess({ token: d.access_token, refresh: d.refresh_token, expira: Date.now() + (d.expires_in || 3600) * 1000, uid: (d.user && d.user.id) || (sess && sess.uid) });
+  function msgErro(j, status) {
+    let m = j && (j.message || j.msg || j.error_description || j.error);
+    if (!m) return "Erro " + status;
+    if (/row-level security|permission denied/i.test(m)) return "Você não tem permissão para esta ação.";
+    if (/(column|schema cache)/i.test(m) && /(hora_prevista|hora_fim|campos|usa_financeiro|ordem|ativo)/i.test(m)) return "O banco ainda não recebeu a atualização 1. Rode o arquivo kanban_atualizacao_1.sql no Supabase.";
+    if (/duplicate key/i.test(m)) return "Já existe um registro igual.";
+    if (/JWT expired|invalid JWT/i.test(m)) return "Sessão expirada. Entre de novo.";
+    return m;
+  }
+  const qs = p => Object.entries(p || {}).filter(([, v]) => v !== undefined).map(([k, v]) => encodeURIComponent(k) + "=" + encodeURIComponent(v)).join("&");
+
+  async function renovar() {
+    if (!sess || !sess.refresh) { guardarSess(null); throw new Error("Sessão expirada. Entre de novo."); }
+    try {
+      const r = await chamar("/auth/v1/token?grant_type=refresh_token", { metodo: "POST", corpo: { refresh_token: sess.refresh }, semToken: true }, false);
+      aPartirDe(r.dados);
+    } catch (e) {
+      if (e.status && e.status < 500) { guardarSess(null); throw new Error("Sessão expirada. Entre de novo."); }
+      throw e;
+    }
+  }
+  async function chamar(caminho, { metodo = "GET", corpo, cab = {}, semToken = false } = {}, repetir = true) {
+    const h = { apikey: CFG.chave, ...cab };
+    if (corpo !== undefined) h["Content-Type"] = "application/json";
+    if (!semToken && sess) {
+      if (sess.expira - Date.now() < 60000 && repetir) await renovar();
+      if (sess) h.Authorization = "Bearer " + sess.token;
+    }
+    let r;
+    try { r = await fetch(CFG.url + caminho, { method: metodo, headers: h, body: corpo !== undefined ? JSON.stringify(corpo) : undefined }); }
+    catch (e) { throw new Error("Sem conexão com o servidor. Verifique a internet e tente de novo."); }
+    if (r.status === 401 && !semToken && sess && repetir) { await renovar(); return chamar(caminho, { metodo, corpo, cab, semToken }, false); }
+    const txt = await r.text();
+    let j = null; try { j = txt ? JSON.parse(txt) : null; } catch (e) { j = null; }
+    if (!r.ok) { const e = new Error(msgErro(j, r.status)); e.status = r.status; throw e; }
+    return { dados: j };
+  }
+  const ler = async (t, p) => (await chamar(`/rest/v1/${t}?${qs(p)}`)).dados || [];
+  async function listar(t, p) {
+    let tudo = [], desde = 0;
+    for (;;) {
+      const pag = (await chamar(`/rest/v1/${t}?${qs({ ...p, limit: 1000, offset: desde })}`)).dados || [];
+      tudo = tudo.concat(pag);
+      if (pag.length < 1000) break;
+      desde += 1000;
+    }
+    return tudo;
+  }
+  return {
+    get logado() { return !!sess; },
+    get uid() { return sess && sess.uid; },
+    ler, listar,
+    inserir: async (t, corpo, query, prefer = "return=representation") => (await chamar(`/rest/v1/${t}${query ? "?" + qs(query) : ""}`, { metodo: "POST", corpo, cab: { Prefer: prefer } })).dados,
+    alterar: async (t, filtros, corpo) => (await chamar(`/rest/v1/${t}?${qs(filtros)}`, { metodo: "PATCH", corpo, cab: { Prefer: "return=representation" } })).dados || [],
+    apagar: async (t, filtros) => (await chamar(`/rest/v1/${t}?${qs(filtros)}`, { metodo: "DELETE", cab: { Prefer: "return=representation" } })).dados || [],
+    rpc: async (nome, args) => (await chamar(`/rest/v1/rpc/${nome}`, { metodo: "POST", corpo: args || {} })).dados,
+    async entrar(usuario, senha) {
+      const email = String(usuario).trim().toLowerCase() + "@" + CFG.dominio;
+      try { aPartirDe((await chamar("/auth/v1/token?grant_type=password", { metodo: "POST", corpo: { email, password: senha }, semToken: true }, false)).dados); }
+      catch (e) { if (e.status && e.status >= 400 && e.status < 500) throw new Error("Usuário ou senha incorretos."); throw e; }
+    },
+    async sair() { try { if (sess) await chamar("/auth/v1/logout", { metodo: "POST" }, false); } catch (e) { /* sai mesmo assim */ } guardarSess(null); },
+    limpar() { guardarSess(null); },
+    trocarSenha: senha => chamar("/auth/v1/user", { metodo: "PUT", corpo: { password: senha } }),
+    funcao: async (nome, corpo) => (await chamar("/functions/v1/" + nome, { metodo: "POST", corpo })).dados
+  };
+})();
+
+/* ===================== ESTADO ===================== */
+const S = { eu: null, usuarios: [], quadros: [], todosQuadros: [], meus: new Map(), quadroId: null, cartoes: [], categorias: [], etiquetas: [], resp: new Map(), etq: new Map(), atualizadoEm: null, limConcluidos: 20 };
+const F = pref.ler("filtros", null) || {};
+const FILTRO_BASE = { campo: "data_prevista", periodo: "hoje", de: "", ate: "", status: "abertos", tipo: "", categoria: "", resp: "", busca: "", arquivados: false };
+F.painel = { ...FILTRO_BASE, ...(F.painel || {}) };
+F.kanban = { ...FILTRO_BASE, periodo: "todos", status: "todos", ...(F.kanban || {}) };
+const salvarFiltros = () => pref.gravar("filtros", F);
+const admin = () => !!S.eu && S.eu.papel === "admin";
+const nomeDe = id => { const u = S.usuarios.find(x => x.id === id); return u ? u.nome : "—"; };
+const quadroAtual = () => S.quadros.find(q => q.id === S.quadroId);
+const areaDe = id => S.todosQuadros.find(q => q.id === id) || S.quadros.find(q => q.id === id);
+const podeEditar = qid => admin() || S.meus.get(qid) === "editor";
+const cartoesArea = () => S.cartoes.filter(c => c.quadro_id === S.quadroId);
+const usaFin = () => { const q = quadroAtual(); return !!(q && q.usa_financeiro); };
+const categoriasArea = qid => S.categorias.filter(c => c.quadro_id === (qid || S.quadroId));
+const etiquetasArea = qid => S.etiquetas.filter(c => c.quadro_id === (qid || S.quadroId));
+const camposDe = qid => { const q = areaDe(qid); return q && Array.isArray(q.campos) ? q.campos : []; };
+const respTxt = c => (S.resp.get(c.id) || []).map(id => String(nomeDe(id)).split(" ")[0]).join(", ");
+const horaTxt = hh => hh ? String(hh).slice(0, 5) : "";
+const faixaHora = c => c.hora_prevista ? horaTxt(c.hora_prevista) + (c.hora_fim ? "–" + horaTxt(c.hora_fim) : "") : "";
+const campoTxt = (c, d) => { const v = (c.campos || {})[d.id]; if (v === undefined || v === null || v === "") return ""; return d.tipo === "data" ? dataBR(v) : d.tipo === "numero" ? String(v).replace(".", ",") : String(v); };
+const destaques = c => camposDe(c.quadro_id).map(d => campoTxt(c, d)).filter(Boolean).slice(0, 2);
+const nomeCategoria = id => { const c = S.categorias.find(x => x.id === id); return c ? c.nome : ""; };
+const cartaoLocal = id => S.cartoes.find(c => c.id === id);
+function erro(e) {
+  console.error(e);
+  const m = (e && e.message) || "Algo deu errado.";
+  aviso(m, "erro");
+  if (/Sessão expirada/.test(m)) telaLogin();
+}
+
+async function carregarBase() {
+  const eu = await Api.ler("profiles", { select: "*", id: "eq." + Api.uid });
+  if (!eu.length || !eu[0].ativo) { Api.limpar(); throw new Error("Seu acesso está desativado. Fale com o administrador."); }
+  S.eu = eu[0];
+  const [usuarios, meus] = await Promise.all([
+    Api.ler("profiles", { select: "id,usuario,nome,papel,ativo,trocar_senha", order: "nome.asc" }),
+    Api.ler("quadro_membros", { select: "quadro_id,papel", usuario_id: "eq." + Api.uid })
+  ]);
+  S.usuarios = usuarios; S.meus = new Map(meus.map(m => [m.quadro_id, m.papel]));
+  await carregarAreas();
+  const lembrado = pref.ler("quadro", null);
+  if (!S.quadros.some(q => q.id === S.quadroId)) {
+    const q = S.quadros.find(x => x.id === lembrado) || S.quadros.find(x => x.chave === "producao") || S.quadros[0];
+    S.quadroId = q ? q.id : null;
+  }
+}
+async function carregarQuadro() {
+  if (!S.quadros.length) { S.cartoes = []; S.categorias = []; S.etiquetas = []; S.resp = new Map(); S.etq = new Map(); S.atualizadoEm = new Date(); return; }
+  const [cartoes, categorias, etiquetas, resp, etq] = await Promise.all([
+    Api.listar("cartoes", { select: COLUNAS_CARTAO, excluido_em: "is.null", order: "id_curto.asc,id.asc" }),
+    Api.ler("categorias", { select: "*", order: "nome.asc" }),
+    Api.ler("etiquetas", { select: "*" }),
+    Api.listar("cartao_responsaveis", { select: "cartao_id,usuario_id", order: "cartao_id.asc,usuario_id.asc" }),
+    Api.listar("cartao_etiquetas", { select: "cartao_id,etiqueta_id", order: "cartao_id.asc,etiqueta_id.asc" })
+  ]);
+  const mapa = (arr, a, b) => { const m = new Map(); arr.forEach(r => { if (!m.has(r[a])) m.set(r[a], []); m.get(r[a]).push(r[b]); }); return m; };
+  const ativas = new Set(S.quadros.map(q => q.id));
+  S.cartoes = cartoes.filter(c => ativas.has(c.quadro_id)); S.categorias = categorias; S.etiquetas = etiquetas;
+  S.resp = mapa(resp, "cartao_id", "usuario_id"); S.etq = mapa(etq, "cartao_id", "etiqueta_id");
+  S.atualizadoEm = new Date();
+}
+function mesclar(row) {
+  const { dados_origem, descricao, ...resto } = row;
+  const c = cartaoLocal(row.id);
+  if (c) Object.assign(c, resto);
+  return c;
+}
+
+/* ===================== FILTROS ===================== */
+function passa(c, f, hoje) {
+  if (!f.arquivados && c.arquivado) return false;
+  if (f.status === "abertos" && c.status === "concluido") return false;
+  if (f.status === "concluidos" && c.status !== "concluido") return false;
+  if (f.tipo && (areaDe(c.quadro_id) || {}).usa_financeiro && c.tipo !== f.tipo) return false;
+  if (f.categoria === "__sem") { if (c.categoria_id) return false; }
+  else if (f.categoria && categoriasArea(c.quadro_id).some(x => x.id === f.categoria) && c.categoria_id !== f.categoria) return false;
+  if (f.resp && !(S.resp.get(c.id) || []).includes(f.resp === "__eu" ? Api.uid : f.resp)) return false;
+  if (f.busca && !((c.titulo + " " + (c.empresa || "")).toLowerCase().includes(f.busca.toLowerCase()))) return false;
+  const d = c[f.campo];
+  switch (f.periodo) {
+    case "hoje": return d === hoje;
+    case "semana": return !!d && d >= inicioSemana(hoje) && d <= fimSemana(hoje);
+    case "mes": return !!d && d >= inicioMes(hoje) && d <= fimMes(hoje);
+    case "atrasados": return ehAtrasado(c, hoje);
+    case "semdata": return !d;
+    case "periodo": return !!d && (!f.de || d >= f.de) && (!f.ate || d <= f.ate);
+    default: return true;
+  }
+}
+function contadores(f, hoje) {
+  const ab = cartoesArea().filter(c => !c.arquivado && c.status !== "concluido");
+  return {
+    atrasados: ab.filter(c => ehAtrasado(c, hoje)).length,
+    hoje: ab.filter(c => c[f.campo] === hoje).length,
+    semana: ab.filter(c => c[f.campo] && c[f.campo] >= inicioSemana(hoje) && c[f.campo] <= fimSemana(hoje)).length,
+    semdata: ab.filter(c => !c[f.campo]).length
+  };
+}
+const porData = campo => (a, b) => {
+  const x = a[campo] || "9999-99-99", y = b[campo] || "9999-99-99";
+  return x < y ? -1 : x > y ? 1 : a.titulo.localeCompare(b.titulo, "pt-BR");
+};
+function somas(lista) {
+  let p = 0, r = 0;
+  lista.forEach(c => { if (c.valor == null) return; if (c.tipo === "receber") r += cent(c.valor); else if (c.tipo !== "tarefa") p += cent(c.valor); });
+  return { pagar: p / 100, receber: r / 100 };
+}
+function relativo(c, hoje) {
+  if (c.status === "concluido" || !c.data_prevista) return "";
+  const d = diasEntre(hoje, c.data_prevista);
+  if (d < 0) return `atrasado há ${-d} ${d === -1 ? "dia" : "dias"}`;
+  if (d === 0) return "vence hoje";
+  if (d === 1) return "vence amanhã";
+  return `faltam ${d} dias`;
+}
+
+function barraFiltros(ch, semStatus) {
+  const f = F[ch];
+  const per = [["hoje", "Hoje"], ["semana", "Esta semana"], ["mes", "Este mês"], ["atrasados", "Atrasados"], ["semdata", "Sem data"], ["periodo", "Período"], ["todos", "Tudo"]];
+  const sel = (nome, rot, opcoes, valor) => `<div class="field"><label for="fl-${ch}-${nome}">${rot}</label><select id="fl-${ch}-${nome}" data-filtro="${nome}" data-grupo="${ch}">${opcoes}</select></div>`;
+  return `<div class="panel filtros" role="group" aria-label="Filtros">
+    <div class="f-linha">
+      ${sel("campo", "Filtrar pela data de", opt("data_prevista", "Término previsto", f.campo) + opt("data_inicio", "Início", f.campo))}
+      <div class="seg" role="group" aria-label="Período">${per.map(([v, r]) => `<button type="button" aria-pressed="${f.periodo === v}" data-acao="periodo" data-grupo="${ch}" data-valor="${v}">${r}</button>`).join("")}</div>
+    </div>
+    ${f.periodo === "periodo" ? `<div class="f-linha">
+      <div class="field"><label for="fl-${ch}-de">De</label><input id="fl-${ch}-de" type="date" data-filtro="de" data-grupo="${ch}" value="${esc(f.de)}"></div>
+      <div class="field"><label for="fl-${ch}-ate">Até</label><input id="fl-${ch}-ate" type="date" data-filtro="ate" data-grupo="${ch}" value="${esc(f.ate)}"></div></div>` : ""}
+    <div class="f-linha">
+      ${semStatus ? "" : sel("status", "Situação", opt("abertos", "Em aberto", f.status) + opt("concluidos", "Concluídos", f.status) + opt("todos", "Todos", f.status))}
+      ${usaFin() ? sel("tipo", "Tipo", opt("", "Todos", f.tipo) + Object.entries(TIPOS).map(([v, r]) => opt(v, r, f.tipo)).join("")) : ""}
+      ${sel("categoria", "Categoria", opt("", "Todas", f.categoria) + opt("__sem", "Sem categoria", f.categoria) + categoriasArea().map(c => opt(c.id, c.nome, f.categoria)).join(""))}
+      ${sel("resp", "Responsável", opt("", "Todos", f.resp) + opt("__eu", "Só os meus", f.resp) + S.usuarios.filter(u => u.ativo).map(u => opt(u.id, u.nome, f.resp)).join(""))}
+      <div class="field"><label for="fl-${ch}-busca">Buscar</label><input id="fl-${ch}-busca" type="search" data-filtro="busca" data-grupo="${ch}" value="${esc(f.busca)}" placeholder="Título ou empresa"></div>
+      <label class="inline"><input type="checkbox" data-filtro="arquivados" data-grupo="${ch}" ${f.arquivados ? "checked" : ""}> Incluir arquivados</label>
+    </div>
+    ${f.periodo === "atrasados" ? `<p class="muted" style="margin:.5rem 0 0">Atrasados considera sempre o término previsto, com o cartão ainda em aberto.</p>` : ""}
+  </div>`;
+}
+
+/* ===================== TELAS ===================== */
+const views = {};
+let tokenRender = 0;
+
+function cabecalho(titulo, sub, extra = "") {
+  return `<div class="head"><div><h1>${esc(titulo)}</h1><p class="muted" style="margin:0">${sub}</p></div><div class="tools">${extra}</div></div>`;
+}
+const botoesTopo = () => `<button type="button" data-acao="atualizar" title="Buscar de novo no servidor">Atualizar</button>${quadroAtual() && podeEditar(S.quadroId) ? `<button type="button" class="primary" data-acao="novo">Novo cartão</button>` : ""}`;
+const subAtualizado = () => S.atualizadoEm ? `Atualizado às ${S.atualizadoEm.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}. A tela se atualiza sozinha a cada 30 segundos.` : "";
+
+const FILTROS_ABERTOS = { painel: matchMedia("(min-width: 821px)").matches, kanban: matchMedia("(min-width: 821px)").matches };
+const filtrosRecolhiveis = (ch, html) => `<details class="filtros-det" data-det="${ch}"${FILTROS_ABERTOS[ch] ? " open" : ""}><summary>Filtros</summary>${html}</details>`;
+document.addEventListener("toggle", ev => { const d = ev.target; if (d && d.dataset && d.dataset.det) FILTROS_ABERTOS[d.dataset.det] = d.open; }, true);
+function linhaCartao(c, hoje) {
+  const feito = c.status === "concluido";
+  const rel = relativo(c, hoje);
+  const fin = !!(areaDe(c.quadro_id) || {}).usa_financeiro;
+  const meta = [faixaHora(c), c.empresa, nomeCategoria(c.categoria_id), ...destaques(c), respTxt(c), STATUS[c.status]].filter(Boolean).map(esc).join(" · ");
+  return `<div class="linha${feito ? " feito" : ""}">
+    ${feito ? `<button type="button" class="ck" disabled aria-label="Concluído">✓</button>` : `<button type="button" class="ck" data-acao="concluir" data-id="${esc(c.id)}" aria-label="Marcar como concluído: ${esc(c.titulo)}" title="Marcar como concluído">○</button>`}
+    <button type="button" class="abrir" data-acao="abrir" data-id="${esc(c.id)}"><span class="t">${esc(c.titulo)}</span>
+      <span class="m">${meta}${rel ? ` · <b${ehAtrasado(c, hoje) ? ' style="color:var(--danger)"' : ""}>${esc(rel)}</b>` : ""}${c.conferido ? "" : " · não conferido"}</span></button>
+    <div class="n">${fin ? brl(c.valor) : ""}</div>
+    ${fin ? `<span class="tag ${c.tipo === "receber" ? "t-receber" : c.tipo === "pagar" ? "t-pagar" : ""}">${esc(TIPOS[c.tipo] || "—")}</span>` : "<span></span>"}
+  </div>`;
+}
+
+views.painel = () => {
+  const hoje = hojeBR(), f = F.painel, fin = usaFin();
+  const ct = contadores(f, hoje);
+  const lista = cartoesArea().filter(c => passa(c, f, hoje)).sort(porData(f.campo));
+  const grupos = new Map();
+  lista.forEach(c => { const k = c[f.campo] || "sem"; if (!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(c); });
+  const chip = (id, rot, n, cls) => `<button type="button" class="chip ${cls || ""}" aria-pressed="${f.periodo === id}" data-acao="periodo" data-grupo="painel" data-valor="${id}"><span>${rot}</span><b>${n}</b></button>`;
+  const corpo = [...grupos.entries()].map(([d, cs]) => {
+    const t = somas(cs);
+    let tit = "Sem data", cls = "";
+    if (d !== "sem") {
+      tit = `${DIAS[dowIso(d)]}, ${dataBR(d)}`;
+      if (d === hoje) tit += " (hoje)"; else if (d === somarDias(hoje, 1)) tit += " (amanhã)";
+      if (f.campo === "data_prevista" && d < hoje && cs.some(c => c.status !== "concluido")) cls = " atras";
+    }
+    return `<section class="dia"><div class="dia-cab${cls}"><b>${esc(tit)}</b><span class="muted n">${cs.length} ${cs.length === 1 ? "cartão" : "cartões"}${fin && t.pagar ? " · a pagar " + brl(t.pagar) : ""}${fin && t.receber ? " · a receber " + brl(t.receber) : ""}</span></div>${cs.map(c => linhaCartao(c, hoje)).join("")}</section>`;
+  }).join("");
+  const t = somas(lista);
+  return cabecalho("Demandas do dia", `${esc(quadroAtual() ? quadroAtual().nome : "Nenhuma área")}. ${subAtualizado()}`, botoesTopo()) +
+    `<div class="chips">${chip("atrasados", "Atrasados", ct.atrasados, "atras")}${chip("hoje", "Hoje", ct.hoje)}${chip("semana", "Esta semana", ct.semana)}${chip("semdata", "Sem data", ct.semdata)}</div>` +
+    filtrosRecolhiveis("painel", barraFiltros("painel")) +
+    `<div class="panel">${lista.length ? corpo + `<div class="totais"><b>${lista.length} ${lista.length === 1 ? "cartão" : "cartões"}</b>${fin ? `<span>A pagar: <b>${brl(t.pagar)}</b></span><span>A receber: <b>${brl(t.receber)}</b></span>` : ""}</div>`
+      : `<div class="vazio">${cartoesArea().length ? "Nenhum cartão neste filtro. Mude o período ou a data de referência." : "Nenhum cartão ainda. Crie o primeiro em \"Novo cartão\"."}</div>`}</div>`;
+};
+
+views.kanban = () => {
+  const hoje = hojeBR(), f = F.kanban, fin = usaFin(), edita = podeEditar(S.quadroId);
+  const lista = cartoesArea().filter(c => passa(c, f, hoje));
+  const mouse = matchMedia("(pointer: fine)").matches;
+  const cols = STATUS_ORDEM.map(st => {
+    let cs = lista.filter(c => c.status === st);
+    const total = cs.length, t = somas(cs);
+    if (st === "concluido") cs = cs.sort((a, b) => (b.data_conclusao || "").localeCompare(a.data_conclusao || "")).slice(0, S.limConcluidos);
+    else cs = cs.sort(porData(f.campo));
+    const cards = cs.map(c => {
+      const atras = ehAtrasado(c, hoje);
+      const extra = [faixaHora(c), ...destaques(c), respTxt(c)].filter(Boolean).map(esc).join(" · ");
+      return `<article class="kcard${atras ? " atras" : ""}"${edita && mouse ? ' draggable="true"' : ""} data-id="${esc(c.id)}" data-edita="${edita ? 1 : 0}">
+        <button type="button" class="kabrir" data-acao="abrir" data-id="${esc(c.id)}">${esc(c.titulo)}</button>
+        <div class="kmeta"><span>${c.data_prevista ? "Término " + dataCurta(c.data_prevista) : "Sem data"}${c.data_inicio ? " · início " + dataCurta(c.data_inicio) : ""}</span>${fin ? `<span class="n">${brl(c.valor)}</span>` : ""}</div>
+        ${extra ? `<div class="kmeta"><span>${extra}</span></div>` : ""}
+        <div class="kmeta"><span>${fin ? `<span class="tag ${c.tipo === "receber" ? "t-receber" : c.tipo === "pagar" ? "t-pagar" : ""}">${esc(TIPOS[c.tipo] || "—")}</span>` : ""}</span><span>${atras ? `<span class="tag t-perigo">atrasado</span>` : ""}${c.conferido ? "" : ` <span class="tag t-alerta">conferir</span>`}</span></div>
+      </article>`;
+    }).join("");
+    const mais = st === "concluido" && total > cs.length ? `<button type="button" class="small" data-acao="mais-concluidos">Mostrar mais (${total - cs.length})</button>` : "";
+    return `<section class="kcol" data-status="${st}" aria-label="${STATUS[st]}"><h2><span>${STATUS[st]} (${total})</span><span class="muted n">${fin && (t.pagar || t.receber) ? brl(t.pagar + t.receber) : ""}</span></h2>${cards || `<div class="vazio" style="padding:1rem .5rem">Vazio</div>`}${mais}</section>`;
+  }).join("");
+  return cabecalho("Kanban", `${esc(quadroAtual() ? quadroAtual().nome : "")}. ${edita ? "No computador, arraste os cartões. No celular, segure o cartão por um instante e arraste até a coluna." : "Você só pode ler esta área."} ${subAtualizado()}`, botoesTopo()) +
+    filtrosRecolhiveis("kanban", barraFiltros("kanban", true)) + `<div class="kanban">${cols}</div>`;
+};
+
+/* ---- Conferência dos importados ---- */
+const FC = { alerta: "", status: "", arq: "", busca: "", sel: new Set() };
+views.conferir = () => {
+  const todos = cartoesArea().filter(c => !c.conferido);
+  const cods = [...new Set(todos.flatMap(c => c.alertas || []))].sort();
+  const lista = todos.filter(c =>
+    (!FC.alerta || (FC.alerta === "__nenhum" ? !(c.alertas || []).length : (c.alertas || []).includes(FC.alerta))) &&
+    (!FC.status || c.status === FC.status) &&
+    (!FC.arq || (FC.arq === "sim") === c.arquivado) &&
+    (!FC.busca || c.titulo.toLowerCase().includes(FC.busca.toLowerCase())));
+  [...FC.sel].forEach(id => { if (!lista.some(c => c.id === id)) FC.sel.delete(id); });
+  const todosSel = lista.length && lista.every(c => FC.sel.has(c.id));
+  const linhas = lista.map(c => `<tr>
+    <td><input type="checkbox" data-sel="${esc(c.id)}" ${FC.sel.has(c.id) ? "checked" : ""} aria-label="Selecionar ${esc(c.titulo)}"></td>
+    <td><button type="button" class="small" data-acao="abrir" data-id="${esc(c.id)}">Abrir</button></td>
+    <td>${esc(c.titulo)}<div class="muted" style="font-size:.8rem">${esc(c.lista_origem || "")}</div></td>
+    <td class="n">${c.valor != null ? brl(c.valor) : c.valor_sugerido != null ? `<span class="tag t-alerta">sugerido ${brl(c.valor_sugerido)}</span>` : "—"}</td>
+    <td>${c.data_prevista ? dataBR(c.data_prevista) : "—"}</td>
+    <td>${esc(STATUS[c.status])}${c.arquivado ? ` <span class="tag">arquivado</span>` : ""}</td>
+    <td>${(c.alertas || []).filter(a => a !== "anexo_baixar_manual").map(a => `<span class="tag t-alerta" title="${esc(a)}">${esc(alertaTxt(a))}</span>`).join(" ")}</td></tr>`).join("");
+  const nsel = FC.sel.size;
+  return cabecalho("Conferir importados", `${todos.length} de ${cartoesArea().length} cartões desta área ainda não foram conferidos. Abra o cartão, corrija o que for preciso e marque como conferido.`, `<button type="button" data-acao="atualizar">Atualizar</button>`) +
+    `<div class="panel"><div class="f-linha" style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:flex-end">
+      <div class="field" style="min-width:220px;flex:1"><label for="fc-alerta">Alerta</label><select id="fc-alerta" data-fc="alerta">${opt("", "Todos", FC.alerta)}${opt("__nenhum", "Sem alerta", FC.alerta)}${cods.map(a => opt(a, alertaTxt(a), FC.alerta)).join("")}</select></div>
+      <div class="field"><label for="fc-status">Situação</label><select id="fc-status" data-fc="status">${opt("", "Todas", FC.status)}${STATUS_ORDEM.map(s => opt(s, STATUS[s], FC.status)).join("")}</select></div>
+      <div class="field"><label for="fc-arq">Arquivado no Trello</label><select id="fc-arq" data-fc="arq">${opt("", "Tanto faz", FC.arq)}${opt("sim", "Só arquivados", FC.arq)}${opt("nao", "Só não arquivados", FC.arq)}</select></div>
+      <div class="field"><label for="fc-busca">Buscar</label><input id="fc-busca" type="search" data-fc="busca" value="${esc(FC.busca)}"></div></div></div>` +
+    (nsel ? `<div class="barra-lote" role="region" aria-label="Ações em lote"><b>${nsel} selecionado${nsel > 1 ? "s" : ""}</b>
+      <button type="button" class="primary small" data-acao="lote-conferido">Marcar como conferido</button>
+      <button type="button" class="small" data-acao="lote-concluir">Marcar como concluído</button>
+      <button type="button" class="small" data-acao="lote-arquivar">Arquivar</button>
+      <button type="button" class="small" data-acao="lote-desarquivar">Desarquivar</button>
+      ${admin() ? `<button type="button" class="small danger" data-acao="lote-lixeira">Enviar para a lixeira</button>` : ""}</div>` : "") +
+    `<div class="panel tabela">${lista.length ? `<table><thead><tr><th><input type="checkbox" data-sel-todos ${todosSel ? "checked" : ""} aria-label="Selecionar todos"></th><th></th><th>Cartão</th><th class="n">Valor</th><th>Término</th><th>Situação</th><th>Alertas</th></tr></thead><tbody>${linhas}</tbody></table>`
+      : `<div class="vazio">${todos.length ? "Nenhum cartão neste filtro." : "Tudo conferido. Nada pendente."}</div>`}</div>`;
+};
+
+/* ---- Agenda ---- */
+const FA = { modo: "semana", ref: "", area: "", resp: "", concl: true, ...pref.ler("agenda", {}) };
+const salvarAgenda = () => pref.gravar("agenda", { modo: FA.modo, area: FA.area, resp: FA.resp, concl: FA.concl });
+const dataLonga = iso => `${DIAS[dowIso(iso)]}, ${dataBR(iso)}`;
+function ordemAgenda(a, b) {
+  if (a.data_prevista !== b.data_prevista) return a.data_prevista < b.data_prevista ? -1 : 1;
+  const ha = a.hora_prevista || "", hb = b.hora_prevista || "";
+  if (ha !== hb) return ha < hb ? -1 : 1;
+  return a.titulo.localeCompare(b.titulo, "pt-BR");
+}
+function itensAgenda(de, ate) {
+  const alvo = FA.resp === "__eu" ? Api.uid : FA.resp;
+  return S.cartoes.filter(c => !c.arquivado && c.data_prevista && c.data_prevista >= de && c.data_prevista <= ate &&
+    (!FA.area || c.quadro_id === FA.area) && (FA.concl || c.status !== "concluido") &&
+    (!alvo || (S.resp.get(c.id) || []).includes(alvo))).sort(ordemAgenda);
+}
+function itemAgenda(c, hoje) {
+  const feito = c.status === "concluido", atras = ehAtrasado(c, hoje);
+  const meta = [(areaDe(c.quadro_id) || {}).nome, ...destaques(c), respTxt(c), STATUS[c.status]].filter(Boolean).map(esc).join(" · ");
+  return `<div class="ag-item${feito ? " feito" : ""}${atras ? " atras" : ""}"><span class="ag-hora">${faixaHora(c) || "Dia todo"}</span>
+    <button type="button" class="abrir" data-acao="abrir" data-id="${esc(c.id)}"><span class="t">${esc(c.titulo)}</span><span class="m">${meta}${atras ? ` · <b style="color:var(--danger)">atrasado</b>` : ""}</span></button></div>`;
+}
+function agNav(d) {
+  if (FA.modo === "semana") FA.ref = somarDias(FA.ref || hojeBR(), 7 * d);
+  else { const [y, m] = (FA.ref || hojeBR()).split("-").map(Number); FA.ref = new Date(Date.UTC(y, m - 1 + d, 1)).toISOString().slice(0, 10); }
+  render();
+}
+views.agenda = () => {
+  const hoje = hojeBR();
+  if (!FA.ref) FA.ref = hoje;
+  if (FA.area && !S.quadros.some(q => q.id === FA.area)) FA.area = "";
+  const sem = FA.modo === "semana";
+  const ini = sem ? inicioSemana(FA.ref) : inicioSemana(inicioMes(FA.ref));
+  const fim = sem ? fimSemana(FA.ref) : fimSemana(fimMes(FA.ref));
+  const itens = itensAgenda(ini, fim);
+  const por = new Map();
+  itens.forEach(c => { if (!por.has(c.data_prevista)) por.set(c.data_prevista, []); por.get(c.data_prevista).push(c); });
+  const dias = []; for (let d = ini; d <= fim; d = somarDias(d, 1)) dias.push(d);
+  const pode = S.quadros.some(q => podeEditar(q.id));
+  let titulo, total;
+  if (sem) { titulo = `${dataCurta(ini)} a ${dataBR(fim)}`; total = itens.length; }
+  else {
+    const t = new Date(inicioMes(FA.ref) + "T00:00:00Z").toLocaleDateString("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" });
+    titulo = t.charAt(0).toUpperCase() + t.slice(1);
+    total = itens.filter(c => c.data_prevista.slice(0, 7) === FA.ref.slice(0, 7)).length;
+  }
+  const corpo = sem ? dias.map(d => {
+    const its = por.get(d) || [];
+    return `<section class="ag-dia"><div class="ag-cab${d === hoje ? " hoje" : ""}"><b>${esc(dataLonga(d))}${d === hoje ? " (hoje)" : ""}</b><span class="muted">${its.length ? pl(its.length, "compromisso", "compromissos") : "livre"}</span>${pode ? `<button type="button" class="small" data-acao="agenda-novo" data-data="${d}" aria-label="Novo cartão em ${dataBR(d)}">+ Novo</button>` : ""}</div>${its.map(c => itemAgenda(c, hoje)).join("")}</section>`;
+  }).join("") : `<div class="mes">${["seg", "ter", "qua", "qui", "sex", "sáb", "dom"].map(n => `<div class="cab-d">${n}</div>`).join("")}${dias.map(d => {
+    const its = por.get(d) || [], fora = d.slice(0, 7) !== FA.ref.slice(0, 7);
+    return `<div class="cel${fora ? " fora" : ""}${d === hoje ? " hoje" : ""}"><button type="button" class="num" data-acao="ag-dia" data-data="${d}" aria-label="Ver a semana de ${dataBR(d)}">${Number(d.slice(8))}</button>
+      ${its.slice(0, 3).map(c => `<button type="button" class="chip-ag${c.status === "concluido" ? " feito" : ""}" data-acao="abrir" data-id="${esc(c.id)}">${c.hora_prevista ? horaTxt(c.hora_prevista) + " " : ""}${esc(c.titulo)}</button>`).join("")}
+      ${its.length > 3 ? `<div class="mais">+${its.length - 3}</div>` : ""}${its.length ? `<span class="conta">${its.length}</span>` : ""}</div>`;
+  }).join("")}</div>`;
+  return cabecalho("Agenda", `Compromissos pela data de término prevista, em todas as áreas que você acessa. ${subAtualizado()}`, `<button type="button" data-acao="atualizar">Atualizar</button>`) +
+    `<div class="panel ag-barra"><div class="seg"><button type="button" data-acao="ag-nav" data-d="-1" aria-label="Anterior">‹</button><button type="button" data-acao="ag-hoje">Hoje</button><button type="button" data-acao="ag-nav" data-d="1" aria-label="Próximo">›</button></div>
+      <b style="font-size:1.05rem">${esc(titulo)} <span class="muted" style="font-weight:400">· ${pl(total, "compromisso", "compromissos")}</span></b>
+      <div class="seg"><button type="button" aria-pressed="${sem}" data-acao="ag-modo" data-valor="semana">Semana</button><button type="button" aria-pressed="${!sem}" data-acao="ag-modo" data-valor="mes">Mês</button></div></div>
+    <div class="panel filtros"><div class="f-linha">
+      <div class="field"><label for="ag-area">Área</label><select id="ag-area" data-ag="area">${opt("", "Todas as minhas áreas", FA.area)}${S.quadros.map(q => opt(q.id, q.nome, FA.area)).join("")}</select></div>
+      <div class="field"><label for="ag-resp">Responsável</label><select id="ag-resp" data-ag="resp">${opt("", "Todos", FA.resp)}${opt("__eu", "Só os meus", FA.resp)}${S.usuarios.filter(u => u.ativo).map(u => opt(u.id, u.nome, FA.resp)).join("")}</select></div>
+      <label class="inline"><input type="checkbox" data-ag="concl" ${FA.concl ? "checked" : ""}> Mostrar concluídos</label></div></div>
+    <div class="panel">${corpo}</div>`;
+};
+
+/* ---- Áreas e campos (administrador) ---- */
+const slug = s => String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "campo";
+views.areas = () => {
+  if (!admin()) return `<div class="vazio">Só o administrador acessa esta tela.</div>`;
+  const linhas = S.todosQuadros.map(q => `<tr>
+    <td><input type="text" value="${esc(q.nome)}" data-ar="nome" data-id="${esc(q.id)}" aria-label="Nome da área" style="min-width:200px"></td>
+    <td><input type="number" value="${esc(q.ordem ?? 100)}" data-ar="ordem" data-id="${esc(q.id)}" aria-label="Posição no menu de ${esc(q.nome)}" style="width:84px"></td>
+    <td><label class="inline"><input type="checkbox" data-ar="usa_financeiro" data-id="${esc(q.id)}" ${q.usa_financeiro ? "checked" : ""}> Tipo, valor e empresa</label></td>
+    <td><label class="inline"><input type="checkbox" data-ar="ativo" data-id="${esc(q.id)}" ${q.ativo !== false ? "checked" : ""}> Ativa</label></td>
+    <td>${(q.campos || []).length} <button type="button" class="small" data-acao="area-campos" data-id="${esc(q.id)}">Editar campos</button></td></tr>`).join("");
+  return cabecalho("Áreas e campos", "Cada área é uma tela do sistema (Produção, Compras, Reuniões...). Quem não for liberado em uma área não a enxerga.", `<button type="button" class="primary" data-acao="area-nova">Nova área</button>`) +
+    `<div class="panel tabela"><table><thead><tr><th>Nome</th><th>Posição no menu</th><th>Campos financeiros</th><th>Situação</th><th>Campos extras</th></tr></thead><tbody>${linhas}</tbody></table>
+      <p class="muted" style="margin:.75rem 0 0">Depois de criar uma área, libere as pessoas na tela <b>Usuários</b> (Edita ou Só lê). Desativar uma área só a esconde: os cartões continuam guardados.</p></div>`;
+};
+async function carregarAreas() {
+  const q = await Api.ler("quadros", { select: "*", order: "ordem.asc,nome.asc" });
+  S.todosQuadros = q; S.quadros = q.filter(x => x.ativo !== false);
+  if (!S.quadros.some(x => x.id === S.quadroId)) S.quadroId = S.quadros[0] ? S.quadros[0].id : null;
+}
+function novaArea() {
+  abrir2(`<form id="f-area-nova" novalidate><h2>Nova área</h2>
+    <div class="field"><label for="na-nome">Nome da área *</label><input id="na-nome" type="text" placeholder="Ex.: Reuniões, Visitas a Clientes"><div class="erro-campo" id="e-na" role="alert"></div></div>
+    <div class="field"><label class="inline"><input type="checkbox" id="na-fin"> Mostra tipo (a pagar / a receber), valor e empresa</label></div>
+    <p class="muted">Depois de criar, defina os campos extras e libere o acesso das pessoas na tela Usuários.</p>
+    <div class="rodape-dialogo"><button type="button" id="na-cancelar">Cancelar</button><button type="submit" class="primary">Criar área</button></div></form>`);
+  $("#na-nome").focus();
+  $("#na-cancelar").onclick = fechar2;
+  $("#f-area-nova").onsubmit = async ev => {
+    ev.preventDefault();
+    const nome = $("#na-nome").value.trim();
+    if (nome.length < 2) { $("#e-na").textContent = "Escreva o nome da área."; return; }
+    if (S.todosQuadros.some(q => q.nome.toLowerCase() === nome.toLowerCase())) { $("#e-na").textContent = "Já existe uma área com esse nome."; return; }
+    let base = slug(nome), chave = base, k = 2;
+    while (S.todosQuadros.some(q => q.chave === chave)) chave = base + "_" + k++;
+    const ordem = S.todosQuadros.reduce((m, q) => Math.max(m, q.ordem || 0), 0) + 10;
+    const b = $('#f-area-nova button[type="submit"]'); b.disabled = true;
+    try {
+      await Api.inserir("quadros", { chave, nome, ordem, usa_financeiro: $("#na-fin").checked }, null, "return=minimal");
+      await carregarAreas(); fechar2(); montarShell(); await carregarQuadro(); render();
+      aviso("Área criada. Agora libere as pessoas na tela Usuários.");
+    } catch (e) { $("#e-na").textContent = e.message; b.disabled = false; }
+  };
+}
+let CE = null;
+const opsTxt = d => Array.isArray(d.opcoes) ? d.opcoes.join("; ") : (d.opcoes || "");
+function editarCampos(qid) {
+  const q = areaDe(qid); if (!q) return;
+  CE = { qid, lista: JSON.parse(JSON.stringify(q.campos || [])) };
+  desenharCampos();
+}
+function desenharCampos() {
+  const n = CE.lista.length;
+  const linhas = CE.lista.map((d, i) => `<div class="campo-lin">
+    <input type="text" value="${esc(d.nome)}" data-cf="nome" data-i="${i}" aria-label="Nome do campo ${i + 1}" placeholder="Nome do campo">
+    <select data-cf="tipo" data-i="${i}" aria-label="Tipo do campo ${i + 1}">${opt("texto", "Texto", d.tipo)}${opt("numero", "Número", d.tipo)}${opt("data", "Data", d.tipo)}${opt("lista", "Lista de opções", d.tipo)}</select>
+    ${d.tipo === "lista" ? `<input type="text" value="${esc(opsTxt(d))}" data-cf="opcoes" data-i="${i}" placeholder="Opções separadas por ;" aria-label="Opções do campo ${i + 1}">` : `<span class="muted" style="font-size:.85rem">sem opções</span>`}
+    <span class="seg"><button type="button" class="small" data-acao="cf-sobe" data-i="${i}" aria-label="Subir campo" ${i === 0 ? "disabled" : ""}>↑</button><button type="button" class="small" data-acao="cf-desce" data-i="${i}" aria-label="Descer campo" ${i === n - 1 ? "disabled" : ""}>↓</button><button type="button" class="small danger" data-acao="cf-remove" data-i="${i}" aria-label="Remover campo">✕</button></span></div>`).join("");
+  abrir(`<h2>Campos da área: ${esc((areaDe(CE.qid) || {}).nome)}</h2>
+    <p class="muted">Estes campos aparecem em todo cartão da área. Remover um campo só o esconde: o que já foi preenchido continua guardado.</p>
+    ${linhas || `<div class="vazio">Nenhum campo ainda.</div>`}
+    <div class="erro-campo" id="e-cf" role="alert"></div>
+    <div class="rodape-dialogo"><button type="button" data-acao="cf-novo">+ Adicionar campo</button><button type="button" data-acao="fechar">Cancelar</button><button type="button" class="primary" data-acao="cf-salvar">Salvar campos</button></div>`, true);
+}
+function cfMover(i, d) { const j = i + d; if (j < 0 || j >= CE.lista.length) return; [CE.lista[i], CE.lista[j]] = [CE.lista[j], CE.lista[i]]; desenharCampos(); }
+async function salvarCampos() {
+  const usados = new Set(CE.lista.filter(d => d.id).map(d => d.id));
+  const saida = [];
+  for (const d of CE.lista) {
+    const nome = String(d.nome || "").trim();
+    if (!nome) { $("#e-cf").textContent = "Todo campo precisa de um nome."; return; }
+    const item = { id: d.id, nome, tipo: d.tipo };
+    if (d.tipo === "lista") {
+      const ops = [...new Set(opsTxt(d).split(";").map(s => s.trim()).filter(Boolean))];
+      if (!ops.length) { $("#e-cf").textContent = `O campo "${nome}" é uma lista: informe as opções separadas por ponto e vírgula.`; return; }
+      item.opcoes = ops;
+    }
+    if (!item.id) { const base = slug(nome); let n = base, k = 2; while (usados.has(n)) n = base + "_" + k++; item.id = n; usados.add(n); }
+    saida.push(item);
+  }
+  try {
+    const r = await Api.alterar("quadros", { id: "eq." + CE.qid }, { campos: saida });
+    if (!r.length) throw new Error("Não foi possível salvar.");
+    await carregarAreas(); fechar(); render(); aviso("Campos salvos.");
+  } catch (e) { erro(e); }
+}
+
+/* ---- Lixeira (administrador) ---- */
+const FL = { sel: new Set(), lista: [] };
+views.lixeira = async () => {
+  if (!admin()) return `<div class="vazio">Só o administrador acessa a lixeira.</div>`;
+  FL.lista = await Api.listar("cartoes", { select: "id,titulo,valor,data_prevista,excluido_em,excluido_por,versao,id_curto", quadro_id: "eq." + S.quadroId, excluido_em: "not.is.null", order: "excluido_em.desc,id.asc" });
+  FL.sel = new Set();
+  const linhas = FL.lista.map(c => `<tr><td><input type="checkbox" data-lsel="${esc(c.id)}" aria-label="Selecionar ${esc(c.titulo)}"></td><td>${esc(c.titulo)}</td><td class="n">${brl(c.valor)}</td><td>${dataBR(c.data_prevista) || "—"}</td><td>${esc(horaBR(c.excluido_em))}</td><td>${esc(nomeDe(c.excluido_por))}</td></tr>`).join("");
+  return cabecalho("Lixeira", "Cartões enviados para a lixeira. Restaure ou exclua de vez. A exclusão definitiva não tem volta e leva junto os comentários e o histórico de datas do cartão.", "") +
+    `<div class="barra-lote" id="lx-barra"><b id="lx-n">0 selecionados</b><button type="button" class="small" data-acao="lx-restaurar" disabled id="lx-r">Restaurar</button><button type="button" class="small danger" data-acao="lx-excluir" disabled id="lx-e">Excluir definitivamente</button></div>` +
+    `<div class="panel tabela">${FL.lista.length ? `<table><thead><tr><th><input type="checkbox" data-lsel-todos aria-label="Selecionar todos"></th><th>Cartão</th><th class="n">Valor</th><th>Término</th><th>Enviado em</th><th>Por</th></tr></thead><tbody>${linhas}</tbody></table>` : `<div class="vazio">A lixeira está vazia.</div>`}</div>`;
+};
+
+/* ---- Usuários (administrador) ---- */
+views.usuarios = async () => {
+  if (!admin()) return `<div class="vazio">Só o administrador acessa esta tela.</div>`;
+  const [usuarios, membros] = await Promise.all([
+    Api.ler("profiles", { select: "*", order: "nome.asc" }),
+    Api.ler("quadro_membros", { select: "*" })
+  ]);
+  S.usuarios = usuarios;
+  const papelNo = (uid, qid) => { const m = membros.find(x => x.usuario_id === uid && x.quadro_id === qid); return m ? m.papel : ""; };
+  const linhas = usuarios.map(u => `<tr>
+    <td><b>${esc(u.usuario)}</b></td>
+    <td><input type="text" value="${esc(u.nome)}" data-u="nome" data-id="${esc(u.id)}" aria-label="Nome de ${esc(u.usuario)}" style="min-width:150px"></td>
+    <td><select data-u="papel" data-id="${esc(u.id)}" aria-label="Papel de ${esc(u.usuario)}">${opt("usuario", "Usuário", u.papel)}${opt("admin", "Administrador", u.papel)}</select></td>
+    <td><label class="inline"><input type="checkbox" data-u="ativo" data-id="${esc(u.id)}" ${u.ativo ? "checked" : ""}> Ativo</label></td>
+    <td><button type="button" class="small" data-acao="usr-senha" data-id="${esc(u.id)}">Nova senha</button></td>
+    ${S.todosQuadros.map(q => `<td><select data-um="${esc(q.id)}" data-id="${esc(u.id)}" aria-label="Acesso de ${esc(u.usuario)} a ${esc(q.nome)}">${opt("", "Sem acesso", papelNo(u.id, q.id))}${opt("editor", "Edita", papelNo(u.id, q.id))}${opt("leitor", "Só lê", papelNo(u.id, q.id))}</select></td>`).join("")}</tr>`).join("");
+  return cabecalho("Usuários", "Quem pode entrar e o que cada um acessa. Quem está inativo perde o acesso na hora, e o histórico dele continua guardado.", `<button type="button" class="primary" data-acao="usr-novo">Novo usuário</button>`) +
+    `<div class="panel tabela"><table><thead><tr><th>Usuário</th><th>Nome</th><th>Papel</th><th>Situação</th><th>Senha</th>${S.todosQuadros.map(q => `<th>${esc(q.nome)}</th>`).join("")}</tr></thead><tbody>${linhas}</tbody></table>
+      <p class="muted" style="margin:.75rem 0 0">Administrador acessa todas as áreas. As mudanças valem assim que você altera cada campo.</p></div>
+    <div class="panel"><h2>Como entregar o acesso</h2>
+      <p style="margin:0">Use <b>Novo usuário</b>: o sistema cria o login, libera as áreas e gera uma mensagem pronta com o link, o usuário e a senha para você enviar à pessoa. No primeiro acesso ela é obrigada a trocar a senha. Para encerrar um acesso, desmarque <b>Ativo</b>.</p></div>`;
+};
+
+const ALFABETO_SENHA = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+function gerarSenha(n = 10) {
+  const b = new Uint32Array(n); crypto.getRandomValues(b);
+  return Array.from(b, x => ALFABETO_SENHA[x % ALFABETO_SENHA.length]).join("");
+}
+const linkDoApp = () => location.href.split("#")[0].split("?")[0];
+async function chamarFuncaoUsuarios(corpo) {
+  try { return await Api.funcao("admin-usuarios", corpo); }
+  catch (e) {
+    if (e.status === 404) throw new Error("A função que cria usuários ainda não foi publicada no Supabase. Siga o passo a passo de publicação da função admin-usuarios.");
+    if (e.status === 401) throw new Error("O Supabase recusou o acesso à função (401). Confira se a função admin-usuarios está publicada com \"Verify JWT\" desligado, ou entre de novo no aplicativo.");
+    throw e;
+  }
+}
+function mensagemAcesso(usuario, senha) {
+  return `MINASG GPS - Gestão de Processos e Serviços\nLink: ${linkDoApp()}\nUsuário: ${usuario}\nSenha: ${senha}\nNo primeiro acesso o sistema pede para você criar uma senha nova.`;
+}
+async function copiarTexto(txt) {
+  try { await navigator.clipboard.writeText(txt); return true; }
+  catch (e) {
+    const ta = document.createElement("textarea"); ta.value = txt; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    let ok = false; try { ok = document.execCommand("copy"); } catch (e2) { ok = false; }
+    ta.remove(); return ok;
+  }
+}
+function mostrarAcesso(titulo, usuario, senha) {
+  const msg = mensagemAcesso(usuario, senha);
+  abrir2(`<h2>${esc(titulo)}</h2>
+    <p>Envie esta mensagem à pessoa por um canal privado. <b>A senha não aparece de novo depois que você fechar esta janela.</b></p>
+    <div class="field"><textarea id="ac-msg" rows="6" readonly style="width:100%;font-family:inherit">${esc(msg)}</textarea></div>
+    <div class="rodape-dialogo"><button type="button" id="ac-copiar">Copiar mensagem</button><button type="button" class="primary" id="ac-ok">Fechar</button></div>`);
+  $("#ac-copiar").onclick = async () => { aviso((await copiarTexto(msg)) ? "Mensagem copiada." : "Não foi possível copiar. Selecione o texto e copie."); };
+  $("#ac-ok").onclick = fechar2;
+}
+function novoUsuario() {
+  abrir(`<h2>Novo usuário</h2>
+    <div class="field"><label for="nu-usuario">Usuário (o que a pessoa digita para entrar)</label><input id="nu-usuario" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="ex.: joao.silva"><small class="muted">Letras minúsculas sem acento, números, ponto, hífen ou sublinhado. De 3 a 30 caracteres.</small></div>
+    <div class="field"><label for="nu-nome">Nome da pessoa</label><input id="nu-nome" type="text" autocomplete="off" placeholder="ex.: João Silva"></div>
+    <div class="field"><label for="nu-senha">Senha provisória</label><div style="display:flex;gap:.4rem"><input id="nu-senha" type="text" autocomplete="off" value="${esc(gerarSenha())}" style="flex:1"><button type="button" id="nu-gerar">Gerar outra</button></div><small class="muted">A pessoa será obrigada a trocar no primeiro acesso.</small></div>
+    <div class="field"><label for="nu-papel">Papel</label><select id="nu-papel">${opt("usuario", "Usuário", "usuario")}${opt("admin", "Administrador (acessa tudo)", "usuario")}</select></div>
+    <div class="field" id="nu-areas"><label>Acesso às áreas</label>${S.todosQuadros.map(q => `<div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin:.25rem 0"><span>${esc(q.nome)}</span><select data-nua="${esc(q.id)}" aria-label="Acesso a ${esc(q.nome)}">${opt("", "Sem acesso", "")}${opt("editor", "Edita", "")}${opt("leitor", "Só lê", "")}</select></div>`).join("") || `<span class="muted">Nenhuma área criada.</span>`}</div>
+    <div class="erro-form" id="nu-erro" role="alert" style="color:var(--danger)"></div>
+    <div class="rodape-dialogo"><button type="button" id="nu-cancelar">Cancelar</button><button type="button" class="primary" id="nu-criar">Criar usuário</button></div>`);
+  $("#nu-gerar").onclick = () => { $("#nu-senha").value = gerarSenha(); };
+  $("#nu-cancelar").onclick = fechar;
+  $("#nu-papel").onchange = () => { $("#nu-areas").style.display = $("#nu-papel").value === "admin" ? "none" : ""; };
+  $("#nu-criar").onclick = async () => {
+    const usuario = $("#nu-usuario").value.trim().toLowerCase(), nome = $("#nu-nome").value.trim(), senha = $("#nu-senha").value, papel = $("#nu-papel").value;
+    const e = $("#nu-erro"); e.textContent = "";
+    if (!/^[a-z0-9._-]{3,30}$/.test(usuario)) { e.textContent = "Usuário: de 3 a 30 caracteres, só letras minúsculas sem acento, números, ponto, hífen ou sublinhado."; return; }
+    if (!nome) { e.textContent = "Informe o nome da pessoa."; return; }
+    if (senha.length < 8) { e.textContent = "A senha precisa ter pelo menos 8 caracteres."; return; }
+    const areas = papel === "admin" ? [] : $$("[data-nua]").filter(s => s.value).map(s => ({ quadro_id: s.dataset.nua, papel: s.value }));
+    const b = $("#nu-criar"); b.disabled = true; b.textContent = "Criando...";
+    try {
+      await chamarFuncaoUsuarios({ acao: "criar", usuario, nome, senha, papel, areas });
+      fechar(); mostrarAcesso("Usuário criado", usuario, senha); render();
+    } catch (err) { e.textContent = err.message; b.disabled = false; b.textContent = "Criar usuário"; }
+  };
+  setTimeout(() => { const i = $("#nu-usuario"); if (i) i.focus(); }, 50);
+}
+function novaSenhaUsuario(id) {
+  const u = S.usuarios.find(x => x.id === id); if (!u) return;
+  abrir(`<h2>Nova senha de ${esc(u.nome)}</h2>
+    <p class="muted">Usuário: <b>${esc(u.usuario)}</b>. A senha antiga deixa de valer e a pessoa terá de trocar a nova no próximo acesso.</p>
+    <div class="field"><label for="ns-senha">Senha provisória</label><div style="display:flex;gap:.4rem"><input id="ns-senha" type="text" autocomplete="off" value="${esc(gerarSenha())}" style="flex:1"><button type="button" id="ns-gerar">Gerar outra</button></div></div>
+    <div class="erro-form" id="ns-erro" role="alert" style="color:var(--danger)"></div>
+    <div class="rodape-dialogo"><button type="button" id="ns-cancelar">Cancelar</button><button type="button" class="primary" id="ns-ok">Trocar senha</button></div>`);
+  $("#ns-gerar").onclick = () => { $("#ns-senha").value = gerarSenha(); };
+  $("#ns-cancelar").onclick = fechar;
+  $("#ns-ok").onclick = async () => {
+    const senha = $("#ns-senha").value, e = $("#ns-erro"); e.textContent = "";
+    if (senha.length < 8) { e.textContent = "A senha precisa ter pelo menos 8 caracteres."; return; }
+    const b = $("#ns-ok"); b.disabled = true;
+    try { await chamarFuncaoUsuarios({ acao: "redefinir_senha", usuario_id: id, senha }); fechar(); mostrarAcesso("Senha trocada", u.usuario, senha); }
+    catch (err) { e.textContent = err.message; b.disabled = false; }
+  };
+}
+
+/* ---- Importar JSON do Trello (administrador) ---- */
+const IMP = { dados: null, relatorio: "" };
+views.importar = () => {
+  if (!admin()) return `<div class="vazio">Só o administrador importa dados.</div>`;
+  const d = IMP.dados;
+  return cabecalho("Importar do Trello", "Leia o arquivo JSON de importação, confira o resumo e confirme. Importar de novo não duplica nem sobrescreve o que você já editou.", "") +
+    `<div class="panel"><div class="field"><label for="imp-arq">Arquivo JSON</label><input id="imp-arq" type="file" accept="application/json,.json"></div>
+      ${d ? resumoImportacao(d) : `<p class="muted">Nenhum arquivo lido ainda.</p>`}
+      <pre id="imp-log" style="white-space:pre-wrap;margin:.75rem 0 0" aria-live="polite">${esc(IMP.relatorio)}</pre></div>`;
+};
+function resumoImportacao(d) {
+  const quadroFin = S.todosQuadros.find(q => q.chave === "financeiro"), quadroDoc = S.todosQuadros.find(q => q.chave === "documentacao");
+  const chaves = (d.usuarios || []).map(u => u.chave);
+  const faltam = chaves.filter(ch => !S.usuarios.some(u => u.usuario === ch));
+  const por = {}; (d.cartoes || []).forEach(c => { por[c.status] = (por[c.status] || 0) + 1; });
+  const podeImportar = quadroFin && quadroDoc;
+  return `<table><tbody>
+    <tr><th>Origem</th><td>${esc(d.origem && d.origem.quadro)}</td></tr>
+    <tr><th>Cartões financeiros</th><td>${(d.cartoes || []).length} (${por.concluido || 0} concluídos, ${por.a_fazer || 0} em aberto)</td></tr>
+    <tr><th>Documentos de processos</th><td>${(d.documentos || []).length}</td></tr>
+    <tr><th>Para conferir</th><td>${(d.cartoes || []).filter(c => c.conferir).length} cartões com alerta</td></tr>
+    <tr><th>Quadros no sistema</th><td>${quadroFin && quadroDoc ? "Encontrados" : "Faltam os quadros 'financeiro' e 'documentacao' (rode o SQL inicial)"}</td></tr>
+    <tr><th>Autores dos cartões</th><td>${faltam.length ? `Usuários não criados ainda: <b>${esc(faltam.join(", "))}</b>. Os cartões deles entram sem autor.` : "Todos existem no sistema"}</td></tr></tbody></table>
+    <div class="tools" style="margin-top:.75rem"><button type="button" class="primary" data-acao="importar-agora" ${podeImportar ? "" : "disabled"}>Importar agora</button></div>`;
+}
+function linhasImportacao(d, ctx) {
+  const uid = ch => { const u = S.usuarios.find(x => x.usuario === ch); return u ? u.id : null; };
+  const fin = (d.cartoes || []).map(c => ({
+    quadro_id: ctx.quadroFin, categoria_id: c.categoria ? ctx.catPorNome.get(c.categoria) || null : null,
+    id_externo: c.id_externo, id_curto: c.id_curto, url_origem: c.url_origem, titulo: c.titulo, descricao: c.descricao,
+    tipo: c.tipo, empresa: c.empresa, valor: c.valor, valor_sugerido: c.valor_sugerido, status: c.status,
+    data_inicio: c.data_inicio, data_prevista: c.data_prevista, data_conclusao: c.data_conclusao, ultima_conclusao: c.ultima_conclusao,
+    recorrencia: c.recorrencia, posicao: c.id_curto || 0, conferido: false, alertas: c.alertas || [],
+    dados_origem: { titulo_original: c.titulo_original, valor_texto_original: c.valor_texto_original, data_prevista_origem: c.data_prevista_origem, vencimento_original_trello: c.vencimento_original_trello, data_lista_trello: c.data_lista_trello, lista_origem: c.lista_origem, lista_origem_arquivada: c.lista_origem_arquivada, comentarios_no_trello: c.comentarios_no_trello, etiquetas: c.etiquetas, anexos: (c.anexos || []).map(a => ({ nome: a.nome, tipo_mime: a.tipo_mime, bytes: a.bytes, url_origem: a.url_origem })) },
+    arquivado: !!c.arquivado, arquivado_em: c.arquivado_em, criado_por: uid(c.criado_por), criado_em: c.criado_em, atualizado_em: c.atualizado_em,
+    _extra: { responsaveis: (c.responsaveis || []).map(uid).filter(Boolean), etiquetas: c.etiquetas || [], historico: (c.historico_datas || []), data_inicio: c.data_inicio, data_prevista: c.data_prevista }
+  }));
+  const docs = (d.documentos || []).map(c => ({
+    quadro_id: ctx.quadroDoc, categoria_id: ctx.catPorNome.get(c.categoria) || null,
+    id_externo: c.id_externo, id_curto: c.id_curto, url_origem: c.url_origem, titulo: c.titulo, descricao: c.descricao,
+    tipo: null, status: "a_fazer", posicao: c.id_curto || 0, conferido: false, alertas: c.alertas || [],
+    dados_origem: { lista_origem: c.lista_origem, comentarios_no_trello: c.comentarios_no_trello, anexos: (c.anexos || []).map(a => ({ nome: a.nome, tipo_mime: a.tipo_mime, bytes: a.bytes, url_origem: a.url_origem })) },
+    arquivado: !!c.arquivado, criado_por: uid(c.criado_por), criado_em: c.criado_em, atualizado_em: c.atualizado_em,
+    _extra: { responsaveis: [], etiquetas: [], historico: [] }
+  }));
+  return fin.concat(docs);
+}
+async function importarAgora() {
+  const d = IMP.dados; if (!d) return;
+  if (!(await confirmar(`Importar ${(d.cartoes || []).length} cartões financeiros e ${(d.documentos || []).length} documentos? Cartões que já foram importados são ignorados.`, "Importar", false))) return;
+  const log = t => { IMP.relatorio += t + "\n"; const el = $("#imp-log"); if (el) el.textContent = IMP.relatorio; };
+  IMP.relatorio = "";
+  const btn = $('[data-acao="importar-agora"]'); if (btn) btn.disabled = true;
+  try {
+    const quadroFin = S.todosQuadros.find(q => q.chave === "financeiro").id, quadroDoc = S.todosQuadros.find(q => q.chave === "documentacao").id;
+    log("Criando categorias e etiquetas...");
+    const cats = (((d.quadros || []).find(q => q.chave === "financeiro") || {}).categorias || []).map(c => ({ quadro_id: quadroFin, nome: c.nome }));
+    cats.push({ quadro_id: quadroDoc, nome: "Gestão de processos" });
+    if (cats.length) await Api.inserir("categorias", cats, { on_conflict: "quadro_id,nome" }, "resolution=ignore-duplicates,return=minimal");
+    const etqs = (d.etiquetas || []).map(e => ({ quadro_id: quadroFin, cor: e.cor, nome: e.nome }));
+    if (etqs.length) await Api.inserir("etiquetas", etqs, { on_conflict: "quadro_id,cor" }, "resolution=ignore-duplicates,return=minimal");
+    const catRows = await Api.ler("categorias", { select: "id,nome,quadro_id" });
+    const catPorNome = new Map(catRows.map(c => [c.nome, c.id]));
+    const etqRows = await Api.ler("etiquetas", { select: "id,cor", quadro_id: "eq." + quadroFin });
+    const etqPorCor = new Map(etqRows.map(e => [e.cor, e.id]));
+    const linhas = linhasImportacao(d, { quadroFin, quadroDoc, catPorNome });
+    let novos = 0, ignorados = 0;
+    for (let i = 0; i < linhas.length; i += 40) {
+      const lote = linhas.slice(i, i + 40);
+      const corpo = lote.map(l => { const { _extra, ...r } = l; return r; });
+      const ret = await Api.inserir("cartoes", corpo, { on_conflict: "id_externo", select: "id,id_externo" }, "resolution=ignore-duplicates,return=representation");
+      const idPor = new Map((ret || []).map(r => [r.id_externo, r.id]));
+      novos += idPor.size; ignorados += lote.length - idPor.size;
+      const hist = [], resp = [], etq = [];
+      lote.forEach(l => {
+        const id = idPor.get(l.id_externo); if (!id) return;
+        if (l._extra.data_prevista) hist.push({ cartao_id: id, campo: "data_prevista", data_anterior: null, data_nova: l._extra.data_prevista, motivo: "Importado do Trello", origem: "importacao", alterado_por: Api.uid });
+        if (l._extra.data_inicio) hist.push({ cartao_id: id, campo: "data_inicio", data_anterior: null, data_nova: l._extra.data_inicio, motivo: "Importado do Trello", origem: "importacao", alterado_por: Api.uid });
+        l._extra.responsaveis.forEach(u => resp.push({ cartao_id: id, usuario_id: u }));
+        l._extra.etiquetas.forEach(cor => { if (etqPorCor.has(cor)) etq.push({ cartao_id: id, etiqueta_id: etqPorCor.get(cor) }); });
+      });
+      if (hist.length) await Api.inserir("historico_datas", hist, null, "return=minimal");
+      if (resp.length) await Api.inserir("cartao_responsaveis", resp, null, "return=minimal");
+      if (etq.length) await Api.inserir("cartao_etiquetas", etq, null, "return=minimal");
+      log(`${Math.min(i + 40, linhas.length)} de ${linhas.length} processados...`);
+    }
+    log(`Pronto: ${novos} cartões novos, ${ignorados} já existiam e foram mantidos.`);
+    await carregarQuadro();
+    aviso("Importação concluída.");
+  } catch (e) { log("PAROU COM ERRO: " + e.message + "\nCorrija e rode de novo: o que já entrou não duplica."); erro(e); }
+  if (btn) btn.disabled = false;
+}
+
+/* ---- Backup (administrador) ---- */
+views.backup = () => {
+  if (!admin()) return `<div class="vazio">Só o administrador faz o backup.</div>`;
+  return cabecalho("Backup", "Baixa uma cópia de tudo (cartões, histórico de datas, comentários, atividades e usuários, inclusive a lixeira) em um arquivo JSON.", "") +
+    `<div class="panel"><p>O plano gratuito do Supabase não oferece cópia automática que você possa baixar. Faça este backup toda semana e guarde o arquivo fora deste computador.</p>
+      <p class="muted">Este arquivo é uma cópia de segurança. A restauração é feita por quem mantém o sistema, não por esta tela.</p>
+      <div class="tools"><button type="button" class="primary" data-acao="baixar-backup" id="bt-backup">Baixar backup agora</button></div><p id="bk-msg" class="muted" aria-live="polite"></p></div>`;
+};
+async function baixarBackup() {
+  const btn = $("#bt-backup"), msg = $("#bk-msg");
+  if (btn) btn.disabled = true;
+  try {
+    const tabelas = [["profiles", "id.asc"], ["quadros", "id.asc"], ["quadro_membros", "quadro_id.asc,usuario_id.asc"], ["categorias", "id.asc"], ["etiquetas", "id.asc"], ["cartoes", "id.asc"], ["cartao_responsaveis", "cartao_id.asc,usuario_id.asc"], ["cartao_etiquetas", "cartao_id.asc,etiqueta_id.asc"], ["comentarios", "id.asc"], ["historico_datas", "id.asc"], ["atividades", "id.asc"]];
+    const saida = { tipo: "backup-kanban-fin", versao: 1, gerado_em: new Date().toISOString(), tabelas: {} };
+    for (const [t, ord] of tabelas) { if (msg) msg.textContent = `Lendo ${t}...`; saida.tabelas[t] = await Api.listar(t, { select: "*", order: ord }); }
+    const blob = new Blob([JSON.stringify(saida)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = `kanban-backup-${hojeBR()}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    if (msg) msg.textContent = `Backup gerado: ${saida.tabelas.cartoes.length} cartões e ${saida.tabelas.historico_datas.length} registros de histórico.`;
+  } catch (e) { erro(e); if (msg) msg.textContent = ""; }
+  if (btn) btn.disabled = false;
+}
+
+/* ===================== CARTÃO ===================== */
+let CA = null; // cartão aberto
+
+function blocoDatas() {
+  const c = CA.c, h = CA.hist;
+  const adiamentos = h.filter(x => x.campo === "data_prevista" && x.origem === "manual" && x.data_anterior && x.data_nova && x.data_nova > x.data_anterior).length;
+  const lin = (rot, campo) => `<div class="datas-lin"><span><b>${rot}:</b> ${c[campo] ? dataBR(c[campo]) + (campo === "data_prevista" && faixaHora(c) ? " às " + faixaHora(c) : "") : "<span class='muted'>sem data</span>"}</span>${CA.novo || !podeEditar(c.quadro_id) ? "" : `<button type="button" class="small" data-acao="mudar-data" data-campo="${campo}">Alterar data</button>`}</div>`;
+  const rec = c.recorrencia ? `<p class="muted" style="margin:.4rem 0 0">Recorrência: ${esc(({ MONTHLY: "mensal", WEEKLY: "semanal", DAILY: "diária", YEARLY: "anual" })[c.recorrencia.frequencia] || c.recorrencia.frequencia || "")}${c.recorrencia.dia_do_mes ? ", dia " + esc(c.recorrencia.dia_do_mes) : ""}. Ao concluir, a próxima data não é gerada automaticamente neste sistema.</p>` : "";
+  return `<h3>Datas</h3>${lin("Início", "data_inicio")}${lin("Término previsto", "data_prevista")}
+    <div class="datas-lin"><span><b>Conclusão:</b> ${c.data_conclusao ? dataBR(c.data_conclusao) : "<span class='muted'>ainda não concluído</span>"}${c.ultima_conclusao ? ` <span class="muted">(última vez: ${dataBR(c.ultima_conclusao)})</span>` : ""}</span></div>${rec}
+    ${CA.novo ? "" : `<h3 style="margin-top:.9rem">Histórico de datas${adiamentos ? ` <span class="tag t-alerta">adiado ${adiamentos} ${adiamentos === 1 ? "vez" : "vezes"}</span>` : ""}</h3>
+    ${h.length ? `<ul class="hist">${h.map(x => `<li><span class="muted">${esc(horaBR(x.alterado_em))} · ${esc(nomeDe(x.alterado_por))}</span><br><b>${x.campo === "data_prevista" ? "Término" : "Início"}:</b> ${x.data_anterior ? dataBR(x.data_anterior) : "sem data"} → ${x.data_nova ? dataBR(x.data_nova) : "sem data"}<br>Motivo: ${esc(x.motivo)}</li>`).join("")}</ul>` : `<p class="muted">Nenhuma mudança registrada.</p>`}`}`;
+}
+function blocoComentarios() {
+  return `<h3>Comentários</h3>${CA.coment.length ? `<ul class="hist">${CA.coment.map(x => `<li><span class="muted">${esc(horaBR(x.criado_em))} · ${esc(nomeDe(x.criado_por))}</span><br>${esc(x.texto).replace(/\n/g, "<br>")}</li>`).join("")}</ul>` : `<p class="muted">Nenhum comentário.</p>`}
+    ${podeEditar(CA.c.quadro_id) ? `<div class="field" style="margin-top:.5rem"><label for="f-coment">Novo comentário</label><textarea id="f-coment" rows="2"></textarea></div>
+    <button type="button" class="small" data-acao="comentar">Adicionar comentário</button>` : ""}`;
+}
+function blocoAtividade() {
+  return CA.ativ.length ? `<h3>Atividade</h3><ul class="hist">${CA.ativ.map(x => `<li><span class="muted">${esc(horaBR(x.criado_em))} · ${esc(nomeDe(x.usuario_id))}</span> — ${esc(x.acao.replace(/_/g, " "))}${x.resumo ? ": " + esc(x.resumo) : ""}</li>`).join("")}</ul>` : "";
+}
+function renderBlocos() {
+  const set = (id, h) => { const el = $("#" + id); if (el) el.innerHTML = h; };
+  set("bl-datas", blocoDatas()); set("bl-coment", blocoComentarios()); set("bl-ativ", blocoAtividade());
+}
+
+function cartaoVazio(qid, status, data) {
+  const fin = !!(areaDe(qid) || {}).usa_financeiro;
+  return { id: null, quadro_id: qid, titulo: "", descricao: "", tipo: fin ? "pagar" : null, empresa: "", categoria_id: null, valor: null, status: status || "a_fazer", data_inicio: null, data_prevista: data || null, hora_prevista: null, hora_fim: null, campos: {}, conferido: true, arquivado: false, versao: 0, alertas: [], dados_origem: null };
+}
+async function abrirCartao(id, novoStatus, pre) {
+  try {
+    if (id) {
+      const [linha, hist, coment, ativ, resp, etq] = await Promise.all([
+        Api.ler("cartoes", { select: "*", id: "eq." + id }),
+        Api.ler("historico_datas", { select: "*", cartao_id: "eq." + id, order: "alterado_em.asc,id.asc" }),
+        Api.ler("comentarios", { select: "*", cartao_id: "eq." + id, order: "criado_em.asc" }),
+        Api.ler("atividades", { select: "*", entidade_id: "eq." + id, order: "criado_em.desc", limit: 15 }),
+        Api.ler("cartao_responsaveis", { select: "usuario_id", cartao_id: "eq." + id }),
+        Api.ler("cartao_etiquetas", { select: "etiqueta_id", cartao_id: "eq." + id })
+      ]);
+      if (!linha.length) throw new Error("Cartão não encontrado. Ele pode ter sido excluído.");
+      CA = { c: linha[0], hist, coment, ativ, resp: resp.map(r => r.usuario_id), etq: etq.map(r => r.etiqueta_id), novo: false };
+    } else {
+      const editaveis = S.quadros.filter(q => podeEditar(q.id));
+      if (!editaveis.length) throw new Error("Você não tem permissão para criar cartões.");
+      const qid = (pre && pre.quadro_id && editaveis.some(q => q.id === pre.quadro_id)) ? pre.quadro_id : (editaveis.some(q => q.id === S.quadroId) ? S.quadroId : editaveis[0].id);
+      CA = { c: cartaoVazio(qid, novoStatus, pre && pre.data_prevista), hist: [], coment: [], ativ: [], resp: [], etq: [], novo: true };
+    }
+    desenharCartao();
+  } catch (e) { erro(e); }
+}
+function campoHtml(def, valor) {
+  const id = "cp-" + def.id, v = valor ?? "";
+  if (def.tipo === "lista") {
+    const ops = def.opcoes || [];
+    return `<div class="field"><label for="${esc(id)}">${esc(def.nome)}</label><select id="${esc(id)}" data-cp="${esc(def.id)}">${opt("", "—", v)}${ops.map(o => opt(o, o, v)).join("")}${v && !ops.includes(v) ? opt(v, v + " (antigo)", v) : ""}</select></div>`;
+  }
+  const txt = def.tipo === "numero" && v !== "" ? String(v).replace(".", ",") : v;
+  return `<div class="field"><label for="${esc(id)}">${esc(def.nome)}</label><input id="${esc(id)}" type="${def.tipo === "data" ? "date" : "text"}"${def.tipo === "numero" ? ' inputmode="decimal"' : ""} data-cp="${esc(def.id)}" value="${esc(txt)}"></div>`;
+}
+function lerBruto() {
+  const c = CA.c, g = id => { const el = $("#" + id); return el ? el.value : ""; };
+  c.titulo = g("f-titulo"); c.descricao = g("f-desc"); c.status = g("f-status") || c.status;
+  c.hora_prevista = g("f-hini") || null; c.hora_fim = g("f-hfim") || null;
+  if (CA.novo) { c.data_inicio = g("f-ini") || null; c.data_prevista = g("f-prev") || null; }
+  CA.resp = $$("[data-resp]", dlg).filter(x => x.checked).map(x => x.dataset.resp);
+}
+function trocarAreaDoCartao(qid) {
+  lerBruto();
+  const a = CA.c;
+  CA.c = Object.assign(cartaoVazio(qid, a.status, a.data_prevista), { titulo: a.titulo, descricao: a.descricao, data_inicio: a.data_inicio, hora_prevista: a.hora_prevista, hora_fim: a.hora_fim });
+  CA.etq = [];
+  desenharCartao();
+}
+function desenharCartao() {
+  const c = CA.c, area = areaDe(c.quadro_id) || {}, fin = !!area.usa_financeiro, pode = podeEditar(c.quadro_id);
+  const origem = c.dados_origem || {};
+  const empresas = [...new Set(S.cartoes.map(x => x.empresa).filter(Boolean))];
+  const cats = categoriasArea(c.quadro_id), etqs = etiquetasArea(c.quadro_id), defs = camposDe(c.quadro_id);
+  const editaveis = S.quadros.filter(q => podeEditar(q.id));
+  const campoStatus = `<div class="field"><label for="f-status">Situação</label><select id="f-status">${STATUS_ORDEM.map(s => opt(s, STATUS[s], c.status)).join("")}</select></div>`;
+  const campoCat = cats.length || fin ? `<div class="field"><label for="f-cat">Categoria</label><select id="f-cat">${opt("", "Sem categoria", c.categoria_id || "")}${cats.map(x => opt(x.id, x.nome, c.categoria_id)).join("")}</select></div>` : "";
+  abrir(`<form id="f-cartao" novalidate>
+    <h2>${CA.novo ? "Novo cartão" : esc(c.titulo)}</h2>
+    ${CA.novo ? `<div class="field"><label for="f-area">Área</label><select id="f-area">${editaveis.map(q => opt(q.id, q.nome, c.quadro_id)).join("")}</select></div>` : `<p class="muted" style="margin-top:-.3rem">Área: ${esc(area.nome || "")}${pode ? "" : " (somente leitura)"}</p>`}
+    ${(c.alertas || []).length && !c.conferido ? `<div class="banner" style="margin-bottom:.7rem"><span><b>Para conferir:</b> ${(c.alertas || []).map(a => esc(alertaTxt(a))).join("; ")}.</span></div>` : ""}
+    <div class="field"><label for="f-titulo">Título *</label><input id="f-titulo" type="text" value="${esc(c.titulo)}" required><div class="erro-campo" id="e-titulo"></div></div>
+    ${fin ? `<div class="grade3">
+      <div class="field"><label for="f-tipo">Tipo</label><select id="f-tipo">${Object.entries(TIPOS).map(([v, r]) => opt(v, r, c.tipo)).join("")}${c.tipo ? "" : opt("", "Sem tipo", "")}</select></div>
+      <div class="field"><label for="f-valor">Valor (R$)</label><input id="f-valor" type="text" inputmode="decimal" value="${esc(valorTxt(c.valor))}" placeholder="0,00"><div class="erro-campo" id="e-valor"></div>
+        ${c.valor_sugerido != null && c.valor == null ? `<button type="button" class="small" data-acao="usar-sugerido">Usar valor sugerido: ${brl(c.valor_sugerido)}</button>` : ""}</div>
+      ${campoStatus}</div>
+    <div class="grade2">
+      <div class="field"><label for="f-empresa">Empresa</label><input id="f-empresa" type="text" list="lista-empresas" value="${esc(c.empresa || "")}"><datalist id="lista-empresas">${empresas.map(e => `<option value="${esc(e)}">`).join("")}</datalist></div>
+      ${campoCat}</div>` : `<div class="grade2">${campoStatus}${campoCat}</div>`}
+    ${defs.length ? `<div class="grade2">${defs.map(d => campoHtml(d, (c.campos || {})[d.id])).join("")}</div><div class="erro-campo" id="e-campos"></div>` : ""}
+    <div class="field"><label for="f-desc">Descrição</label><textarea id="f-desc" rows="3">${esc(c.descricao || "")}</textarea></div>
+    ${CA.novo ? `<div class="grade2"><div class="field"><label for="f-ini">Início</label><input id="f-ini" type="date" value="${esc(c.data_inicio || "")}"></div><div class="field"><label for="f-prev">Término previsto</label><input id="f-prev" type="date" value="${esc(c.data_prevista || "")}"></div></div>` : ""}
+    <div class="grade2"><div class="field"><label for="f-hini">Hora de início (opcional)</label><input id="f-hini" type="time" value="${esc(horaTxt(c.hora_prevista))}"></div>
+      <div class="field"><label for="f-hfim">Hora de término (opcional)</label><input id="f-hfim" type="time" value="${esc(horaTxt(c.hora_fim))}"></div></div><div class="erro-campo" id="e-hora"></div>
+    <div class="field"><label>Responsáveis (funcionários)</label><div class="checks">${S.usuarios.filter(u => u.ativo || CA.resp.includes(u.id)).map(u => `<label class="inline"><input type="checkbox" data-resp="${esc(u.id)}" ${CA.resp.includes(u.id) ? "checked" : ""}> ${esc(u.nome)}</label>`).join("") || "<span class='muted'>Nenhum usuário.</span>"}</div></div>
+    ${etqs.length ? `<div class="field"><label>Etiquetas</label><div class="checks">${etqs.map(e => `<label class="inline"><input type="checkbox" data-etq="${esc(e.id)}" ${CA.etq.includes(e.id) ? "checked" : ""}> <span class="bolinha" style="background:${esc(e.cor)}"></span> ${esc(e.nome || e.cor)}</label>`).join("")}</div></div>` : ""}
+    ${fin || !c.conferido ? `<div class="field"><label class="inline"><input type="checkbox" id="f-conf" ${c.conferido ? "checked" : ""}> Cartão conferido</label></div>` : ""}
+    <div class="bloco" id="bl-datas">${blocoDatas()}</div>
+    ${CA.novo ? "" : `<div class="bloco" id="bl-coment">${blocoComentarios()}</div>
+    ${Object.keys(origem).length ? `<details class="bloco"><summary>Dados originais do Trello</summary><ul class="hist">
+      ${origem.titulo_original ? `<li><b>Título original:</b> ${esc(origem.titulo_original)}</li>` : ""}${origem.lista_origem ? `<li><b>Lista no Trello:</b> ${esc(origem.lista_origem)}</li>` : ""}
+      ${origem.data_lista_trello ? `<li><b>Data da lista:</b> ${esc(dataBR(origem.data_lista_trello))}</li>` : ""}${origem.vencimento_original_trello ? `<li><b>Vencimento no Trello:</b> ${esc(origem.vencimento_original_trello)}</li>` : ""}
+      ${origem.comentarios_no_trello ? `<li><b>Comentários no Trello:</b> ${esc(origem.comentarios_no_trello)} (não vieram na importação)</li>` : ""}
+      ${(origem.anexos || []).length ? `<li><b>Anexos no Trello:</b> ${origem.anexos.map(a => esc(a.nome)).join("; ")}</li>` : ""}</ul></details>` : ""}
+    <div class="bloco" id="bl-ativ">${blocoAtividade()}</div>`}
+    <div class="rodape-dialogo">
+      ${CA.novo || !pode ? "" : `<button type="button" data-acao="arquivar-cartao">${c.arquivado ? "Desarquivar" : "Arquivar"}</button>${admin() ? `<button type="button" class="danger" data-acao="lixeira-cartao">Enviar para a lixeira</button>` : ""}`}
+      <button type="button" data-acao="fechar">Fechar</button>
+      ${pode ? `<button type="submit" class="primary">${CA.novo ? "Criar cartão" : "Salvar cartão"}</button>` : ""}
+    </div></form>`, true);
+  if (pode) $("#f-titulo").focus();
+  else $$("#f-cartao input, #f-cartao select, #f-cartao textarea").forEach(el => { el.disabled = true; });
+}
+function lerFormulario() {
+  const c = CA.c, fin = !!(areaDe(c.quadro_id) || {}).usa_financeiro;
+  ["#e-titulo", "#e-valor", "#e-campos", "#e-hora"].forEach(s => { const el = $(s); if (el) el.textContent = ""; });
+  let ok = true;
+  const titulo = $("#f-titulo").value.trim();
+  if (!titulo) { $("#e-titulo").textContent = "Escreva o título do cartão."; ok = false; }
+  let valor = null;
+  if (fin) { valor = lerValor($("#f-valor").value); if (Number.isNaN(valor)) { $("#e-valor").textContent = "Valor inválido. Use o formato 1.234,56."; ok = false; } }
+  const hi = $("#f-hini").value || null, hf = $("#f-hfim").value || null;
+  if (hi && hf && hf < hi) { $("#e-hora").textContent = "A hora de término não pode ser antes da hora de início."; ok = false; }
+  const campos = { ...(c.campos || {}) };
+  camposDe(c.quadro_id).forEach(d => {
+    const el = $$("[data-cp]", dlg).find(x => x.dataset.cp === d.id); if (!el) return;
+    const v = el.value.trim();
+    if (!v) { delete campos[d.id]; return; }
+    if (d.tipo === "numero") {
+      const n = lerValor(v);
+      if (Number.isNaN(n)) { $("#e-campos").textContent = `"${d.nome}": digite um número, por exemplo 12 ou 12,5.`; ok = false; } else campos[d.id] = n;
+    } else campos[d.id] = v;
+  });
+  if (!ok) return null;
+  const out = {
+    titulo, descricao: $("#f-desc").value.trim() || null, status: $("#f-status").value,
+    categoria_id: ($("#f-cat") ? $("#f-cat").value : c.categoria_id) || null,
+    conferido: $("#f-conf") ? $("#f-conf").checked : c.conferido,
+    hora_prevista: hi, hora_fim: hf, campos,
+    resp: $$("[data-resp]", dlg).filter(x => x.checked).map(x => x.dataset.resp),
+    etq: $$("[data-etq]", dlg).filter(x => x.checked).map(x => x.dataset.etq)
+  };
+  if (fin) { out.tipo = $("#f-tipo").value || null; out.valor = valor; out.empresa = $("#f-empresa").value.trim() || null; }
+  return out;
+}
+async function sincronizarLigacoes(cartaoId, tabela, campo, antes, depois) {
+  const novos = depois.filter(x => !antes.includes(x)), fora = antes.filter(x => !depois.includes(x));
+  if (novos.length) await Api.inserir(tabela, novos.map(x => ({ cartao_id: cartaoId, [campo]: x })), null, "return=minimal");
+  for (const x of fora) await Api.apagar(tabela, { cartao_id: "eq." + cartaoId, [campo]: "eq." + x });
+}
+async function salvarCartao() {
+  const f = lerFormulario(); if (!f) return;
+  const btn = $('#f-cartao button[type="submit"]'); if (btn) btn.disabled = true;
+  try {
+    const c = CA.c;
+    const { resp, etq, ...dados } = f;
+    if (CA.novo) {
+      const corpo = { quadro_id: c.quadro_id, ...dados, data_inicio: $("#f-ini").value || null, data_prevista: $("#f-prev").value || null };
+      const [novo] = await Api.inserir("cartoes", corpo);
+      const hist = [];
+      if (novo.data_prevista) hist.push({ cartao_id: novo.id, campo: "data_prevista", data_anterior: null, data_nova: novo.data_prevista, motivo: "Data definida na criação do cartão", alterado_por: Api.uid });
+      if (novo.data_inicio) hist.push({ cartao_id: novo.id, campo: "data_inicio", data_anterior: null, data_nova: novo.data_inicio, motivo: "Data definida na criação do cartão", alterado_por: Api.uid });
+      if (hist.length) await Api.inserir("historico_datas", hist, null, "return=minimal");
+      await sincronizarLigacoes(novo.id, "cartao_responsaveis", "usuario_id", [], resp);
+      await sincronizarLigacoes(novo.id, "cartao_etiquetas", "etiqueta_id", [], etq);
+      aviso("Cartão criado.");
+    } else {
+      const ordena = o => Object.keys(o || {}).sort().reduce((r, k) => (r[k] = o[k], r), {});
+      const mudou = {};
+      Object.keys(dados).forEach(k => {
+        let a = dados[k], b = c[k];
+        if (k === "campos") { if (JSON.stringify(ordena(a)) !== JSON.stringify(ordena(b))) mudou[k] = a; return; }
+        if (k === "hora_prevista" || k === "hora_fim") { a = a || null; b = b ? b.slice(0, 5) : null; }
+        if ((a ?? null) !== (b ?? null)) mudou[k] = a;
+      });
+      if (Object.keys(mudou).length) {
+        const r = await Api.alterar("cartoes", { id: "eq." + c.id, versao: "eq." + c.versao }, mudou);
+        if (!r.length) throw new Error("Outra pessoa alterou este cartão enquanto você editava. Feche, abra de novo e refaça a mudança.");
+        CA.c = r[0];
+      }
+      await sincronizarLigacoes(c.id, "cartao_responsaveis", "usuario_id", CA.resp, resp);
+      await sincronizarLigacoes(c.id, "cartao_etiquetas", "etiqueta_id", CA.etq, etq);
+      aviso("Cartão salvo.");
+    }
+    fechar();
+    await carregarQuadro(); render();
+  } catch (e) { erro(e); if (btn) btn.disabled = false; }
+}
+async function mudarData(campo) {
+  const c = CA.c, rotulo = campo === "data_prevista" ? "término previsto" : "início";
+  abrir2(`<form id="f-data" novalidate><h2>Alterar ${esc(rotulo)}</h2>
+    <p class="muted">Data atual: ${c[campo] ? dataBR(c[campo]) : "sem data"}. Toda mudança de data fica registrada com o motivo.</p>
+    <div class="field"><label for="d-nova">Nova data</label><input id="d-nova" type="date" value="${esc(c[campo] || "")}"></div>
+    <div class="field"><label class="inline"><input type="checkbox" id="d-sem"> Deixar sem data</label></div>
+    <div class="field"><label for="d-motivo">Motivo *</label><input id="d-motivo" type="text" list="lista-motivos" autocomplete="off" placeholder="Escolha ou escreva o motivo"><datalist id="lista-motivos">${MOTIVOS.map(m => `<option value="${esc(m)}">`).join("")}</datalist><div class="erro-campo" id="e-motivo"></div></div>
+    <div class="rodape-dialogo"><button type="button" id="d-cancelar">Cancelar</button><button type="submit" class="primary">Salvar nova data</button></div></form>`);
+  $("#d-motivo").focus();
+  $("#d-cancelar").onclick = fechar2;
+  $("#f-data").onsubmit = async ev => {
+    ev.preventDefault();
+    const motivo = $("#d-motivo").value.trim(), nova = $("#d-sem").checked ? null : ($("#d-nova").value || null);
+    if (motivo.length < 3) { $("#e-motivo").textContent = "Informe o motivo da mudança (mínimo 3 letras)."; return; }
+    if ((nova || null) === (c[campo] || null)) { $("#e-motivo").textContent = "A data não mudou."; return; }
+    const b = $('#f-data button[type="submit"]'); b.disabled = true;
+    try {
+      const r = await Api.rpc("alterar_data", { p_cartao: c.id, p_campo: campo, p_nova: nova, p_motivo: motivo, p_versao: c.versao });
+      CA.c = { ...CA.c, ...r };
+      CA.hist = await Api.ler("historico_datas", { select: "*", cartao_id: "eq." + c.id, order: "alterado_em.asc,id.asc" });
+      fechar2(); renderBlocos(); aviso("Data alterada e registrada no histórico.");
+      carregarQuadro().then(render).catch(erro);
+    } catch (e) { erro(e); b.disabled = false; }
+  };
+}
+async function comentar() {
+  const el = $("#f-coment"), t = el.value.trim();
+  if (!t) { aviso("Escreva o comentário antes de adicionar.", "erro"); return; }
+  try {
+    await Api.inserir("comentarios", { cartao_id: CA.c.id, texto: t }, null, "return=minimal");
+    CA.coment = await Api.ler("comentarios", { select: "*", cartao_id: "eq." + CA.c.id, order: "criado_em.asc" });
+    const txt = $("#f-coment"); const val = ""; renderBlocos(); if (txt) $("#f-coment").value = val;
+    aviso("Comentário adicionado.");
+  } catch (e) { erro(e); }
+}
+
+/* ===================== AÇÕES ===================== */
+async function concluirCartao(id) {
+  const c = cartaoLocal(id); if (!c) return;
+  if (!podeEditar(c.quadro_id)) { aviso("Você só pode ler esta área.", "erro"); return; }
+  try {
+    const r = await Api.alterar("cartoes", { id: "eq." + id, versao: "eq." + c.versao }, { status: "concluido" });
+    if (!r.length) { aviso("Outro usuário alterou este cartão. Atualizei a tela, tente de novo.", "erro"); await carregarQuadro(); }
+    else { mesclar(r[0]); aviso("Cartão concluído."); }
+    render();
+  } catch (e) { erro(e); }
+}
+async function moverCartao(id, status) {
+  const c = cartaoLocal(id); if (!c || c.status === status) return;
+  if (!podeEditar(c.quadro_id)) { aviso("Você só pode ler esta área.", "erro"); return; }
+  try {
+    const r = await Api.alterar("cartoes", { id: "eq." + id, versao: "eq." + c.versao }, { status });
+    if (!r.length) { aviso("Outro usuário alterou este cartão. Atualizei a tela, tente de novo.", "erro"); await carregarQuadro(); }
+    else { mesclar(r[0]); aviso(`Movido para "${STATUS[status]}".`); }
+    render();
+  } catch (e) { erro(e); }
+}
+async function emLote(ids, corpo, msg) {
+  for (let i = 0; i < ids.length; i += 40) await Api.alterar("cartoes", { id: `in.(${ids.slice(i, i + 40).join(",")})` }, corpo);
+  await carregarQuadro();
+  aviso(msg);
+}
+async function acaoLote(acao) {
+  const ids = [...FC.sel]; if (!ids.length) return;
+  try {
+    if (acao === "lote-conferido") { await emLote(ids, { conferido: true }, `${pl(ids.length, "cartão marcado", "cartões marcados")} como conferido${ids.length === 1 ? "" : "s"}.`); }
+    else if (acao === "lote-arquivar") { if (!(await confirmar(`Arquivar ${pl(ids.length, "cartão", "cartões")}? Eles saem do painel e do Kanban, mas continuam no sistema.`, "Arquivar", false))) return; await emLote(ids, { arquivado: true }, "Cartões arquivados."); }
+    else if (acao === "lote-desarquivar") { await emLote(ids, { arquivado: false }, "Cartões desarquivados."); }
+    else if (acao === "lote-concluir") {
+      const d = await pedirTexto(`Marcar ${pl(ids.length, "cartão", "cartões")} como concluído${ids.length === 1 ? "" : "s"}`, "Data de conclusão (deixe vazio para usar hoje)", "Concluir cartões", "date");
+      if (d === null) return;
+      await emLote(ids, d ? { status: "concluido", data_conclusao: d } : { status: "concluido" }, "Cartões concluídos.");
+    } else if (acao === "lote-lixeira") {
+      if (!(await confirmar(`Enviar ${pl(ids.length, "cartão", "cartões")} para a lixeira? Você pode restaurá-los depois.`, "Enviar para a lixeira"))) return;
+      await emLote(ids, { excluido_em: new Date().toISOString() }, "Cartões enviados para a lixeira.");
+    }
+    FC.sel = new Set(); render();
+  } catch (e) { erro(e); }
+}
+async function acaoLixeira(acao) {
+  const ids = [...FL.sel]; if (!ids.length) return;
+  try {
+    if (acao === "lx-restaurar") {
+      for (let i = 0; i < ids.length; i += 40) await Api.alterar("cartoes", { id: `in.(${ids.slice(i, i + 40).join(",")})` }, { excluido_em: null });
+      aviso("Cartões restaurados."); await carregarQuadro();
+    } else {
+      if (!(await confirmar(`Excluir DEFINITIVAMENTE ${pl(ids.length, "cartão", "cartões")}? Isso não tem volta. Comentários e histórico de datas deles também serão apagados. Fica só o registro de quem excluiu e quando.`, "Excluir definitivamente"))) return;
+      const n = await Api.rpc("excluir_definitivamente", { p_ids: ids });
+      aviso(`${pl(n, "cartão excluído", "cartões excluídos")}.`);
+    }
+    render();
+  } catch (e) { erro(e); }
+}
+function trocarSenha() {
+  abrir2(`<form id="f-senha" novalidate><h2>Trocar minha senha</h2>
+    <div class="field"><label for="s-nova">Nova senha (mínimo 8 caracteres)</label><input id="s-nova" type="password" autocomplete="new-password"></div>
+    <div class="field"><label for="s-rep">Repita a nova senha</label><input id="s-rep" type="password" autocomplete="new-password"><div class="erro-campo" id="e-senha"></div></div>
+    <div class="rodape-dialogo"><button type="button" id="s-cancelar">Cancelar</button><button type="submit" class="primary">Salvar nova senha</button></div></form>`);
+  $("#s-nova").focus();
+  $("#s-cancelar").onclick = fechar2;
+  $("#f-senha").onsubmit = async ev => {
+    ev.preventDefault();
+    const a = $("#s-nova").value, b = $("#s-rep").value;
+    if (a.length < 8) { $("#e-senha").textContent = "A senha precisa ter pelo menos 8 caracteres."; return; }
+    if (a !== b) { $("#e-senha").textContent = "As duas senhas são diferentes."; return; }
+    try { await Api.trocarSenha(a); await Api.rpc("marcar_senha_trocada"); S.eu.trocar_senha = false; fechar2(); aviso("Senha alterada."); render(); }
+    catch (e) { $("#e-senha").textContent = e.message; }
+  };
+}
+
+/* ===================== ESTRUTURA DA PÁGINA ===================== */
+function telaLogin(msg) {
+  S.eu = null; fechar(); fechar2();
+  $("#raiz").innerHTML = `<main class="login"><div class="brand" style="padding-left:0">${LOGO}<div><b>MINASG GPS</b><small>Gestão de Processos e Serviços</small></div></div><p class="muted">Entre com o usuário e a senha que o administrador enviou.</p>
+    <form id="f-login" class="panel" novalidate>
+      <div class="field"><label for="l-usuario">Usuário</label><input id="l-usuario" type="text" autocomplete="username" autocapitalize="none" spellcheck="false"></div>
+      <div class="field"><label for="l-senha">Senha</label><input id="l-senha" type="password" autocomplete="current-password"></div>
+      <div class="erro-campo" id="l-erro" role="alert">${esc(msg || "")}</div>
+      <button type="submit" class="primary" style="width:100%">Entrar</button></form></main>`;
+  $("#l-usuario").focus();
+  $("#f-login").onsubmit = async ev => {
+    ev.preventDefault();
+    const u = $("#l-usuario").value.trim(), s = $("#l-senha").value;
+    if (!u || !s) { $("#l-erro").textContent = "Digite o usuário e a senha."; return; }
+    const b = $('#f-login button'); b.disabled = true; $("#l-erro").textContent = "";
+    try { await Api.entrar(u, s); await iniciar(); }
+    catch (e) { $("#l-erro").textContent = e.message; b.disabled = false; }
+  };
+}
+const LOGO = `<svg viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#1f5f8b"/><path fill="#fff" fill-rule="evenodd" d="M228.0 110.7 L233.3 67.4 L278.7 67.4 L284.0 110.7 L318.8 122.0 L348.5 90.0 L385.3 116.8 L364.0 154.8 L385.6 184.5 L428.4 176.1 L442.4 219.3 L402.9 237.7 L402.9 274.3 L442.4 292.7 L428.4 335.9 L385.6 327.5 L364.0 357.2 L385.3 395.2 L348.5 422.0 L318.8 390.0 L284.0 401.3 L278.7 444.6 L233.3 444.6 L228.0 401.3 L193.2 390.0 L163.5 422.0 L126.7 395.2 L148.0 357.2 L126.4 327.5 L83.6 335.9 L69.6 292.7 L109.1 274.3 L109.1 237.7 L69.6 219.3 L83.6 176.1 L126.4 184.5 L148.0 154.8 L126.7 116.8 L163.5 90.0 L193.2 122.0 Z M344 256 A88 88 0 1 0 168 256 A88 88 0 1 0 344 256 Z"/><path d="M212 262l32 32 62-72" fill="none" stroke="#f5b335" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+function montarShell() {
+  const a = admin();
+  const instalado = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+  $("#raiz").innerHTML = `<div class="app"><nav class="side" aria-label="Principal">
+    <div class="brand">${LOGO}<div><b>MINASG GPS</b><small>Gestão de Processos e Serviços</small></div></div>
+    <div class="field" style="margin:0 0 .4rem"><label for="sel-quadro" class="sr">Área</label><select id="sel-quadro" aria-label="Área">${S.quadros.map(q => opt(q.id, q.nome, S.quadroId)).join("")}</select></div>
+    <a href="#/painel" data-rota="painel">Demandas do dia</a>
+    <a href="#/kanban" data-rota="kanban">Kanban</a>
+    <a href="#/agenda" data-rota="agenda">Agenda</a>
+    <a href="#/conferir" data-rota="conferir">Conferir importados</a>
+    ${a ? `<div class="side-grupo">Administração</div><a href="#/lixeira" data-rota="lixeira">Lixeira</a><a href="#/usuarios" data-rota="usuarios">Usuários</a><a href="#/areas" data-rota="areas">Áreas e campos</a><a href="#/importar" data-rota="importar">Importar do Trello</a><a href="#/backup" data-rota="backup">Backup</a>` : ""}
+    <div class="side-fim"><span class="muted">${esc(S.eu.nome)}</span>${instalado ? "" : `<button type="button" class="small" data-acao="instalar">Instalar no celular</button>`}<button type="button" class="small" data-acao="senha">Trocar senha</button><button type="button" class="small" data-acao="sair">Sair</button></div>
+  </nav><main id="tela" tabindex="-1"></main></div>`;
+}
+async function render() {
+  if (!S.eu) return;
+  const rota = (location.hash.replace(/^#\//, "") || "painel").split("?")[0];
+  const nome = views[rota] ? rota : "painel";
+  $$(".side a").forEach(a => { if (a.dataset.rota === nome) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+  const meu = ++tokenRender, tela = $("#tela");
+  if (!tela) return;
+  const foco = document.activeElement && document.activeElement.id, pos = document.activeElement && document.activeElement.selectionStart;
+  let html;
+  const precisaArea = ["painel", "kanban", "conferir", "agenda"].includes(nome);
+  try { html = (precisaArea && !S.quadros.length) ? `<div class="vazio">Você ainda não tem acesso a nenhuma área. Peça ao administrador para liberar.</div>` : await views[nome](); } catch (e) { erro(e); html = `<div class="vazio">Não foi possível carregar esta tela.</div>`; }
+  if (meu !== tokenRender) return;
+  const banner = S.eu.trocar_senha ? `<div class="banner"><span>Sua senha é provisória.</span><button type="button" class="small" data-acao="senha">Trocar agora</button></div>` : "";
+  tela.innerHTML = banner + html;
+  if (foco) { const el = document.getElementById(foco); if (el && "value" in el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) { /* campo sem cursor */ } } }
+}
+async function iniciar() {
+  try {
+    await carregarBase(); await carregarQuadro();
+  } catch (e) { return telaLogin(e.message && !/Erro 4\d\d/.test(e.message) ? e.message : ""); }
+  montarShell(); render();
+}
+
+/* ===================== EVENTOS ===================== */
+let tAtualiza = null;
+document.addEventListener("click", async ev => {
+  const el = ev.target.closest("[data-acao]"); if (!el) return;
+  const a = el.dataset.acao, id = el.dataset.id;
+  if (a === "abrir" && Date.now() < Drag.bloqueiaClique) return;
+  if (a === "abrir") abrirCartao(id);
+  else if (a === "novo") abrirCartao(null);
+  else if (a === "concluir") concluirCartao(id);
+  else if (a === "atualizar") { try { await carregarQuadro(); render(); aviso("Atualizado."); } catch (e) { erro(e); } }
+  else if (a === "periodo") { F[el.dataset.grupo].periodo = el.dataset.valor; salvarFiltros(); render(); }
+  else if (a === "mais-concluidos") { S.limConcluidos += 20; render(); }
+  else if (a === "fechar") fechar();
+  else if (a === "mudar-data") mudarData(el.dataset.campo);
+  else if (a === "comentar") comentar();
+  else if (a === "usar-sugerido") { $("#f-valor").value = valorTxt(CA.c.valor_sugerido); }
+  else if (a === "arquivar-cartao") {
+    try { const r = await Api.alterar("cartoes", { id: "eq." + CA.c.id, versao: "eq." + CA.c.versao }, { arquivado: !CA.c.arquivado }); if (!r.length) throw new Error("Outra pessoa alterou este cartão. Feche e abra de novo."); fechar(); aviso(r[0].arquivado ? "Cartão arquivado." : "Cartão desarquivado."); await carregarQuadro(); render(); } catch (e) { erro(e); }
+  }
+  else if (a === "lixeira-cartao") {
+    if (await confirmar(`Enviar "${CA.c.titulo}" para a lixeira? Você pode restaurar depois.`, "Enviar para a lixeira")) {
+      try { const r = await Api.alterar("cartoes", { id: "eq." + CA.c.id, versao: "eq." + CA.c.versao }, { excluido_em: new Date().toISOString() }); if (!r.length) throw new Error("Outra pessoa alterou este cartão. Feche e abra de novo."); fechar(); aviso("Cartão enviado para a lixeira."); await carregarQuadro(); render(); } catch (e) { erro(e); }
+    }
+  }
+  else if (a.startsWith("lote-")) acaoLote(a);
+  else if (a === "lx-restaurar" || a === "lx-excluir") acaoLixeira(a);
+  else if (a === "importar-agora") importarAgora();
+  else if (a === "baixar-backup") baixarBackup();
+  else if (a === "senha") trocarSenha();
+  else if (a === "instalar") instalar();
+  else if (a === "usr-novo") novoUsuario();
+  else if (a === "usr-senha") novaSenhaUsuario(id);
+  else if (a === "ag-nav") agNav(Number(el.dataset.d));
+  else if (a === "ag-hoje") { FA.ref = hojeBR(); render(); }
+  else if (a === "ag-modo") { FA.modo = el.dataset.valor; salvarAgenda(); render(); }
+  else if (a === "ag-dia") { FA.ref = el.dataset.data; FA.modo = "semana"; salvarAgenda(); render(); }
+  else if (a === "agenda-novo") abrirCartao(null, null, { data_prevista: el.dataset.data, quadro_id: FA.area || undefined });
+  else if (a === "area-nova") novaArea();
+  else if (a === "area-campos") editarCampos(id);
+  else if (a === "cf-novo") { CE.lista.push({ id: null, nome: "", tipo: "texto" }); desenharCampos(); const ins = $$('[data-cf="nome"]'); if (ins.length) ins[ins.length - 1].focus(); }
+  else if (a === "cf-sobe") cfMover(Number(el.dataset.i), -1);
+  else if (a === "cf-desce") cfMover(Number(el.dataset.i), 1);
+  else if (a === "cf-remove") { CE.lista.splice(Number(el.dataset.i), 1); desenharCampos(); }
+  else if (a === "cf-salvar") salvarCampos();
+  else if (a === "sair") { await Api.sair(); location.hash = "#/painel"; telaLogin(); }
+});
+document.addEventListener("submit", ev => { if (ev.target.id === "f-cartao") { ev.preventDefault(); salvarCartao(); } });
+
+document.addEventListener("change", async ev => {
+  const t = ev.target;
+  if (t.id === "sel-quadro") { S.quadroId = t.value; pref.gravar("quadro", t.value); S.limConcluidos = 20; FC.sel = new Set(); render(); return; }
+  if (t.id === "f-area") { trocarAreaDoCartao(t.value); return; }
+  if (t.dataset && t.dataset.ag) { const k = t.dataset.ag; FA[k] = t.type === "checkbox" ? t.checked : t.value; salvarAgenda(); render(); return; }
+  if (t.dataset && t.dataset.cf === "tipo" && CE) { CE.lista[Number(t.dataset.i)].tipo = t.value; desenharCampos(); return; }
+  if (t.dataset && t.dataset.ar) {
+    const id = t.dataset.id, campo = t.dataset.ar;
+    let valor = t.type === "checkbox" ? t.checked : t.value.trim();
+    if (campo === "ordem") { valor = parseInt(valor, 10); if (Number.isNaN(valor)) { aviso("Digite um número para a posição.", "erro"); render(); return; } }
+    if (campo === "nome" && !valor) { aviso("O nome da área não pode ficar vazio.", "erro"); render(); return; }
+    try {
+      if (campo === "ativo" && !valor && !(await confirmar("Desativar esta área? Ela some do menu de todos. Os cartões continuam guardados e você pode reativar depois.", "Desativar"))) { render(); return; }
+      const r = await Api.alterar("quadros", { id: "eq." + id }, { [campo]: valor });
+      if (!r.length) throw new Error("Não foi possível salvar.");
+      await carregarAreas(); montarShell(); await carregarQuadro(); render(); aviso("Área atualizada.");
+    } catch (e) { erro(e); render(); }
+    return;
+  }
+  if (t.dataset && t.dataset.filtro && t.dataset.grupo && t.type !== "search") {
+    F[t.dataset.grupo][t.dataset.filtro] = t.type === "checkbox" ? t.checked : t.value; salvarFiltros(); render(); return;
+  }
+  if (t.dataset && t.dataset.fc) { FC[t.dataset.fc] = t.value; render(); return; }
+  if (t.dataset && "sel" in t.dataset) { if (t.checked) FC.sel.add(t.dataset.sel); else FC.sel.delete(t.dataset.sel); render(); return; }
+  if (t.hasAttribute && t.hasAttribute("data-sel-todos")) {
+    $$("[data-sel]").forEach(x => { if (t.checked) FC.sel.add(x.dataset.sel); else FC.sel.delete(x.dataset.sel); }); render(); return;
+  }
+  if (t.dataset && "lsel" in t.dataset) { t.checked ? FL.sel.add(t.dataset.lsel) : FL.sel.delete(t.dataset.lsel); atualizarBarraLixeira(); return; }
+  if (t.hasAttribute && t.hasAttribute("data-lsel-todos")) { $$("[data-lsel]").forEach(x => { x.checked = t.checked; t.checked ? FL.sel.add(x.dataset.lsel) : FL.sel.delete(x.dataset.lsel); }); atualizarBarraLixeira(); return; }
+  if (t.id === "imp-arq" && t.files[0]) {
+    try { const d = JSON.parse(await t.files[0].text()); if (!Array.isArray(d.cartoes)) throw new Error("x"); IMP.dados = d; IMP.relatorio = ""; render(); }
+    catch (e) { aviso("Arquivo inválido. Escolha o JSON de importação gerado para este sistema.", "erro"); }
+    return;
+  }
+  if (t.dataset && t.dataset.u) {
+    const id = t.dataset.id, campo = t.dataset.u;
+    const valor = t.type === "checkbox" ? t.checked : t.value.trim();
+    if (campo === "nome" && !valor) { aviso("O nome não pode ficar vazio.", "erro"); render(); return; }
+    try {
+      if (campo === "ativo" && !valor && !(await confirmar("Desativar este usuário? Ele perde o acesso na hora. O histórico dele continua guardado.", "Desativar"))) { render(); return; }
+      const r = await Api.alterar("profiles", { id: "eq." + id }, { [campo]: valor });
+      if (!r.length) throw new Error("Não foi possível salvar.");
+      aviso("Usuário atualizado."); if (id === Api.uid) S.eu = { ...S.eu, ...r[0] };
+    } catch (e) { erro(e); render(); }
+    return;
+  }
+  if (t.dataset && t.dataset.um) {
+    const qid = t.dataset.um, uid = t.dataset.id;
+    try {
+      if (!t.value) await Api.apagar("quadro_membros", { quadro_id: "eq." + qid, usuario_id: "eq." + uid });
+      else await Api.inserir("quadro_membros", { quadro_id: qid, usuario_id: uid, papel: t.value }, { on_conflict: "quadro_id,usuario_id" }, "resolution=merge-duplicates,return=minimal");
+      aviso("Acesso atualizado.");
+    } catch (e) { erro(e); render(); }
+  }
+});
+function atualizarBarraLixeira() {
+  const n = FL.sel.size, el = $("#lx-n"); if (el) el.textContent = `${n} selecionado${n === 1 ? "" : "s"}`;
+  ["#lx-r", "#lx-e"].forEach(s => { const b = $(s); if (b) b.disabled = n === 0; });
+}
+let tBusca = null;
+document.addEventListener("input", ev => {
+  const t = ev.target;
+  if (t.dataset && t.dataset.cf && t.dataset.cf !== "tipo" && CE) { CE.lista[Number(t.dataset.i)][t.dataset.cf] = t.value; return; }
+  if (t.dataset && t.dataset.filtro === "busca") { F[t.dataset.grupo].busca = t.value; salvarFiltros(); clearTimeout(tBusca); tBusca = setTimeout(render, 250); }
+  else if (t.dataset && t.dataset.fc === "busca") { FC.busca = t.value; clearTimeout(tBusca); tBusca = setTimeout(render, 250); }
+});
+
+/* ===== arrastar cartões: mouse (arrastar) e celular (segurar e arrastar) ===== */
+const Drag = { mouse: false, timer: null, ativo: false, id: null, ghost: null, alvo: null, x0: 0, y0: 0, x: 0, y: 0, dx: 0, dy: 0, raf: null, bloqueiaClique: 0 };
+const STATUS_BARRA = ["a_fazer", "em_andamento", "concluido"];
+const alvoSob = (x, y) => { const el = document.elementFromPoint(x, y); return el && el.closest ? el.closest(".kcol, .dropbtn") : null; };
+function marcarAlvo(el) {
+  if (Drag.alvo === el) return;
+  if (Drag.alvo) Drag.alvo.classList.remove("sobre");
+  Drag.alvo = el; if (el) el.classList.add("sobre");
+}
+function iniciarArraste(card, x, y) {
+  Drag.ativo = true; Drag.id = card.dataset.id;
+  const r = card.getBoundingClientRect();
+  const g = card.cloneNode(true);
+  g.classList.add("ghost"); g.removeAttribute("draggable"); g.style.width = r.width + "px";
+  Drag.dx = x - r.left; Drag.dy = y - r.top;
+  document.body.appendChild(g); Drag.ghost = g;
+  card.classList.add("arrastando");
+  const barra = document.createElement("div");
+  barra.className = "dropbar"; barra.id = "dropbar"; barra.setAttribute("aria-hidden", "true");
+  barra.innerHTML = STATUS_BARRA.map(s => `<div class="dropbtn" data-status="${s}">${STATUS[s]}</div>`).join("");
+  document.body.appendChild(barra);
+  document.body.classList.add("arrastando-cartao");
+  if (navigator.vibrate) { try { navigator.vibrate(25); } catch (e) { /* sem vibração */ } }
+  moverArraste(x, y);
+  Drag.raf = requestAnimationFrame(rolagemAuto);
+}
+function moverArraste(x, y) {
+  Drag.x = x; Drag.y = y;
+  Drag.ghost.style.transform = `translate(${x - Drag.dx}px, ${y - Drag.dy}px) rotate(2deg)`;
+  marcarAlvo(alvoSob(x, y));
+}
+function rolagemAuto() {
+  if (!Drag.ativo) return;
+  const k = $(".kanban");
+  if (k) { const r = k.getBoundingClientRect(); if (Drag.x < r.left + 48) k.scrollLeft -= 14; else if (Drag.x > r.right - 48) k.scrollLeft += 14; }
+  if (Drag.y < 70) window.scrollBy(0, -14);
+  Drag.raf = requestAnimationFrame(rolagemAuto);
+}
+function encerrarArraste(soltou) {
+  clearTimeout(Drag.timer); Drag.timer = null;
+  if (!Drag.ativo) return;
+  cancelAnimationFrame(Drag.raf);
+  const st = soltou && Drag.alvo ? Drag.alvo.dataset.status : null, id = Drag.id;
+  if (Drag.ghost) Drag.ghost.remove();
+  const bar = $("#dropbar"); if (bar) bar.remove();
+  $$(".arrastando").forEach(x => x.classList.remove("arrastando"));
+  if (Drag.alvo) Drag.alvo.classList.remove("sobre");
+  document.body.classList.remove("arrastando-cartao");
+  Object.assign(Drag, { ativo: false, id: null, ghost: null, alvo: null, bloqueiaClique: Date.now() + 450 });
+  if (st) moverCartao(id, st);
+}
+document.addEventListener("touchstart", ev => {
+  const card = ev.target.closest && ev.target.closest(".kcard");
+  if (!card || ev.touches.length !== 1 || card.dataset.edita !== "1") return;
+  const t = ev.touches[0];
+  Drag.x0 = Drag.x = t.clientX; Drag.y0 = Drag.y = t.clientY;
+  clearTimeout(Drag.timer);
+  Drag.timer = setTimeout(() => { Drag.timer = null; iniciarArraste(card, Drag.x, Drag.y); }, 380);
+}, { passive: true });
+document.addEventListener("touchmove", ev => {
+  const t = ev.touches[0];
+  if (Drag.ativo) { ev.preventDefault(); moverArraste(t.clientX, t.clientY); return; }
+  if (!Drag.timer) return;
+  if (Math.hypot(t.clientX - Drag.x0, t.clientY - Drag.y0) > 10) { clearTimeout(Drag.timer); Drag.timer = null; }
+  else { Drag.x = t.clientX; Drag.y = t.clientY; }
+}, { passive: false });
+document.addEventListener("touchend", () => encerrarArraste(true));
+document.addEventListener("touchcancel", () => encerrarArraste(false));
+document.addEventListener("contextmenu", ev => { if (ev.target.closest && ev.target.closest(".kcard") && matchMedia("(pointer: coarse)").matches) ev.preventDefault(); });
+
+document.addEventListener("dragend", () => { Drag.mouse = false; });
+document.addEventListener("dragstart", ev => { const k = ev.target.closest && ev.target.closest(".kcard"); if (!k) return; Drag.mouse = true; ev.dataTransfer.setData("text/plain", k.dataset.id); ev.dataTransfer.effectAllowed = "move"; });
+document.addEventListener("dragover", ev => { const c = ev.target.closest && ev.target.closest(".kcol"); if (!c) return; ev.preventDefault(); $$(".kcol.sobre").forEach(x => { if (x !== c) x.classList.remove("sobre"); }); c.classList.add("sobre"); });
+document.addEventListener("dragleave", ev => { const c = ev.target.closest && ev.target.closest(".kcol"); if (c && !c.contains(ev.relatedTarget)) c.classList.remove("sobre"); });
+document.addEventListener("drop", ev => {
+  const c = ev.target.closest && ev.target.closest(".kcol"); if (!c) return;
+  ev.preventDefault(); c.classList.remove("sobre");
+  const id = ev.dataTransfer.getData("text/plain"); if (id) moverCartao(id, c.dataset.status);
+});
+
+window.addEventListener("hashchange", render);
+setInterval(async () => {
+  if (!S.eu || document.hidden || dlg.open || dlg2.open || Drag.ativo || Drag.mouse) return;
+  const ativo = document.activeElement && document.activeElement.tagName;
+  if (["INPUT", "SELECT", "TEXTAREA"].includes(ativo)) return;
+  const rota = (location.hash.replace(/^#\//, "") || "painel").split("?")[0];
+  if (!["painel", "kanban", "conferir", "agenda"].includes(rota)) return;
+  try { await carregarQuadro(); render(); } catch (e) { /* tenta de novo no próximo ciclo */ }
+}, CFG.atualizarACada);
+
+/* ===================== INSTALAÇÃO NO CELULAR (PWA) ===================== */
+let promptInstalar = null;
+window.addEventListener("beforeinstallprompt", ev => { ev.preventDefault(); promptInstalar = ev; });
+window.addEventListener("appinstalled", () => { promptInstalar = null; const b = $('[data-acao="instalar"]'); if (b) b.remove(); });
+async function instalar() {
+  if (promptInstalar) {
+    promptInstalar.prompt();
+    try { await promptInstalar.userChoice; } catch (e) { /* o usuário fechou */ }
+    promptInstalar = null; return;
+  }
+  abrir2(`<h2>Instalar no celular</h2>
+    <p><b>Android (Chrome):</b> toque nos três pontinhos do navegador e escolha "Instalar app" ou "Adicionar à tela inicial".</p>
+    <p><b>iPhone (Safari):</b> toque no botão Compartilhar e escolha "Adicionar à Tela de Início".</p>
+    <p class="muted">A instalação só aparece quando o endereço começa com https (aplicativo publicado online), e não quando o arquivo é aberto direto do computador.</p>
+    <div class="rodape-dialogo"><button type="button" class="primary" id="i-ok">Entendi</button></div>`);
+  $("#i-ok").onclick = fechar2;
+}
+if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
+  window.addEventListener("load", () => { navigator.serviceWorker.register("sw.js").catch(() => { /* sem instalação offline: o app segue funcionando */ }); });
+}
+
+/* ===================== INÍCIO ===================== */
+if (Api.logado) iniciar(); else telaLogin();
+</script>
+</body>
+</html>
