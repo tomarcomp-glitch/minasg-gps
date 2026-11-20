@@ -720,9 +720,10 @@ views.areas = () => {
     <td><input type="number" value="${esc(q.ordem ?? 100)}" data-ar="ordem" data-id="${esc(q.id)}" aria-label="Posição no menu de ${esc(q.nome)}" style="width:84px"></td>
     <td><label class="inline"><input type="checkbox" data-ar="usa_financeiro" data-id="${esc(q.id)}" ${q.usa_financeiro ? "checked" : ""}> Tipo, valor e empresa</label></td>
     <td><label class="inline"><input type="checkbox" data-ar="ativo" data-id="${esc(q.id)}" ${q.ativo !== false ? "checked" : ""}> Ativa</label></td>
-    <td>${(q.campos || []).length} <button type="button" class="small" data-acao="area-campos" data-id="${esc(q.id)}">Editar campos</button></td></tr>`).join("");
-  return cabecalho("Áreas e campos", "Cada área é uma tela do sistema (Produção, Compras, Reuniões...). Quem não for liberado em uma área não a enxerga.", `<button type="button" class="primary" data-acao="area-nova">Nova área</button>`) +
-    `<div class="panel tabela"><table><thead><tr><th>Nome</th><th>Posição no menu</th><th>Campos financeiros</th><th>Situação</th><th>Campos extras</th></tr></thead><tbody>${linhas}</tbody></table>
+    <td>${(q.campos || []).length} <button type="button" class="small" data-acao="area-campos" data-id="${esc(q.id)}">Editar campos</button></td>
+    <td>${S.categorias.filter(x => x.quadro_id === q.id).length} <button type="button" class="small" data-acao="cats-gerenciar" data-id="${esc(q.id)}">Categorias</button></td></tr>`).join("");
+  return cabecalho("Áreas e campos", "Cada área é uma tela do sistema (Produção, Compras, Reuniões...). Quem não for liberado em uma área não a enxerga. Em Categorias você cria os centros de custo de cada área.", `<button type="button" class="primary" data-acao="area-nova">Nova área</button>`) +
+    `<div class="panel tabela"><table><thead><tr><th>Nome</th><th>Posição no menu</th><th>Campos financeiros</th><th>Situação</th><th>Campos extras</th><th>Categorias</th></tr></thead><tbody>${linhas}</tbody></table>
       <p class="muted" style="margin:.75rem 0 0">Depois de criar uma área, libere as pessoas na tela <b>Usuários</b> (Edita ou Só lê). Desativar uma área só a esconde: os cartões continuam guardados.</p></div>`;
 };
 async function carregarAreas() {
@@ -983,6 +984,74 @@ async function moverLote(ids) {
     erro(/Could not find the function/.test(e.message) ? new Error("Falta rodar o SQL da atualização 2 no Supabase para trocar a área.") : e);
   }
 }
+
+/* ---- Categorias de cada área (administrador) ---- */
+let CG = null;
+const usoCategoria = id => S.cartoes.filter(c => c.categoria_id === id).length;
+async function recarregarCategorias() {
+  S.categorias = await Api.ler("categorias", { select: "*", order: "nome.asc" });
+}
+function refrescarSelectCategoria() {
+  const sel = $("#f-cat"); if (!sel || !CA) return;
+  const v = sel.value;
+  sel.innerHTML = opt("", "Sem categoria", v) + categoriasArea(CA.c.quadro_id).map(x => opt(x.id, x.nome, v)).join("");
+}
+function fecharCategorias() { fechar2(); CG = null; refrescarSelectCategoria(); render(); }
+async function abrirCategorias(qid) {
+  CG = { qid };
+  try { await recarregarCategorias(); } catch (e) { erro(e); return; }
+  desenharCategorias();
+}
+function desenharCategorias(msg) {
+  const q = areaDe(CG.qid) || {}, lista = categoriasArea(CG.qid);
+  abrir2(`<h2>Categorias de ${esc(q.nome || "")}</h2>
+    <p class="muted">Use para centros de custo, por exemplo Fornecedores, Impostos, Salários, Prestação de Serviços. O nome muda ao sair do campo. Cartões que usam a categoria acompanham o novo nome.</p>
+    <div style="max-height:45vh;overflow:auto">${lista.map(x => `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.4rem;align-items:center;margin-bottom:.4rem">
+      <input type="text" value="${esc(x.nome)}" data-cg="nome" data-id="${esc(x.id)}" aria-label="Nome da categoria" maxlength="80">
+      <span class="muted" style="white-space:nowrap">${usoCategoria(x.id)} cartões</span>
+      <button type="button" class="small danger" data-cg="excluir" data-id="${esc(x.id)}">Excluir</button></div>`).join("") || `<p class="muted">Nenhuma categoria ainda.</p>`}</div>
+    <div class="field" style="margin-top:.7rem"><label for="cg-nova">Nova categoria</label><div style="display:flex;gap:.4rem"><input id="cg-nova" type="text" maxlength="80" placeholder="Ex.: Fornecedores" style="flex:1"><button type="button" class="primary" id="cg-add">Adicionar</button></div></div>
+    <div class="erro-campo" id="cg-erro" role="alert">${esc(msg || "")}</div>
+    <div class="rodape-dialogo"><button type="button" id="cg-fechar">Fechar</button></div>`);
+  $("#cg-fechar").onclick = fecharCategorias; dlg2.oncancel = () => { CG = null; refrescarSelectCategoria(); render(); };
+  $("#cg-add").onclick = adicionarCategoria;
+  $("#cg-nova").addEventListener("keydown", ev => { if (ev.key === "Enter") { ev.preventDefault(); adicionarCategoria(); } });
+  $$("[data-cg=nome]", dlg2).forEach(i => i.addEventListener("change", () => renomearCategoria(i.dataset.id, i.value)));
+  $$("[data-cg=excluir]", dlg2).forEach(b => b.addEventListener("click", () => excluirCategoria(b.dataset.id)));
+}
+const msgCategoria = e => /duplicate key|unique/i.test(e.message) || /Já existe um registro igual/.test(e.message) ? "Já existe uma categoria com esse nome nesta área." : e.message;
+async function adicionarCategoria() {
+  const nome = $("#cg-nova").value.trim();
+  if (!nome) { $("#cg-erro").textContent = "Escreva o nome da categoria."; return; }
+  try { await Api.inserir("categorias", { quadro_id: CG.qid, nome }, null, "return=minimal"); await recarregarCategorias(); desenharCategorias(); const i = $("#cg-nova"); if (i) i.focus(); }
+  catch (e) { $("#cg-erro").textContent = msgCategoria(e); }
+}
+async function renomearCategoria(id, valor) {
+  const nome = valor.trim(), atual = S.categorias.find(x => x.id === id);
+  if (!atual || nome === atual.nome) return;
+  if (!nome) { desenharCategorias("O nome não pode ficar vazio."); return; }
+  try { await Api.alterar("categorias", { id: "eq." + id }, { nome }); await recarregarCategorias(); desenharCategorias(); }
+  catch (e) { desenharCategorias(msgCategoria(e)); }
+}
+function excluirCategoria(id) {
+  const x = S.categorias.find(c => c.id === id); if (!x) return;
+  const n = usoCategoria(id), outras = categoriasArea(CG.qid).filter(c => c.id !== id);
+  abrir2(`<h2>Excluir "${esc(x.nome)}"?</h2>
+    <p>${n ? `${esc(pl(n, "cartão usa", "cartões usam"))} esta categoria. Para onde eles vão?` : "Nenhum cartão usa esta categoria."}</p>
+    ${n ? `<div class="field"><label for="cg-dest">Mover os cartões para</label><select id="cg-dest">${opt("", "Sem categoria", "")}${outras.map(c => opt(c.id, c.nome, "")).join("")}</select></div>` : ""}
+    <div class="erro-campo" id="cg-erro" role="alert"></div>
+    <div class="rodape-dialogo"><button type="button" id="cg-nao">Voltar</button><button type="button" class="primary danger" id="cg-sim">Excluir categoria</button></div>`);
+  $("#cg-nao").onclick = () => desenharCategorias(); dlg2.oncancel = () => desenharCategorias();
+  $("#cg-sim").onclick = async () => {
+    const b = $("#cg-sim"); b.disabled = true;
+    try {
+      const dest = $("#cg-dest") ? $("#cg-dest").value : "";
+      await Api.alterar("cartoes", { categoria_id: "eq." + id }, { categoria_id: dest || null });
+      await Api.apagar("categorias", { id: "eq." + id });
+      await recarregarCategorias(); await carregarQuadro(); aviso("Categoria excluída."); desenharCategorias();
+    } catch (e) { b.disabled = false; $("#cg-erro").textContent = e.message; }
+  };
+}
 /* ---- Importar JSON do Trello (administrador) ---- */
 const IMP = { dados: null, relatorio: "" };
 views.importar = () => {
@@ -1210,7 +1279,7 @@ function desenharCartao() {
   const cats = categoriasArea(c.quadro_id), etqs = etiquetasArea(c.quadro_id), defs = camposDe(c.quadro_id);
   const editaveis = S.quadros.filter(q => podeEditar(q.id));
   const campoStatus = `<div class="field"><label for="f-status">Situação</label><select id="f-status">${STATUS_ORDEM.map(s => opt(s, STATUS[s], c.status)).join("")}</select></div>`;
-  const campoCat = cats.length || fin ? `<div class="field"><label for="f-cat">Categoria</label><select id="f-cat">${opt("", "Sem categoria", c.categoria_id || "")}${cats.map(x => opt(x.id, x.nome, c.categoria_id)).join("")}</select></div>` : "";
+  const campoCat = cats.length || fin ? `<div class="field"><label for="f-cat">Categoria</label><select id="f-cat">${opt("", "Sem categoria", c.categoria_id || "")}${cats.map(x => opt(x.id, x.nome, c.categoria_id)).join("")}</select>${admin() && !CA.novo ? `<button type="button" class="small" style="margin-top:.3rem" data-acao="cats-gerenciar" data-id="${esc(c.quadro_id)}">Gerenciar categorias</button>` : ""}</div>` : "";
   abrir(`<form id="f-cartao" novalidate>
     <div class="barra-cartao"><h2>${CA.novo ? "Novo cartão" : esc(c.titulo)}</h2><div class="acoes">
       ${CA.novo || !pode ? "" : `<button type="button" class="small" data-acao="arquivar-cartao">${c.arquivado ? "Desarquivar" : "Arquivar"}</button>${admin() ? `<button type="button" class="small danger" data-acao="lixeira-cartao">Enviar para a lixeira</button>` : ""}`}
@@ -1539,6 +1608,7 @@ document.addEventListener("click", async ev => {
   else if (a === "baixar-backup") baixarBackup();
   else if (a === "senha") trocarSenha();
   else if (a === "instalar") instalar();
+  else if (a === "cats-gerenciar") abrirCategorias(id);
   else if (a === "desarquivar") desarquivarCartao(id);
   else if (a === "usr-novo") novoUsuario();
   else if (a === "usr-senha") novaSenhaUsuario(id);
