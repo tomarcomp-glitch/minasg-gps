@@ -58,7 +58,7 @@ button.danger{color:var(--danger)}
 button.small{min-height:32px;padding:.2rem .6rem;font-size:.9rem}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 input,select,textarea{font:inherit;width:100%;padding:.45rem .6rem;border:1px solid var(--line);border-radius:var(--radius);background:var(--bg);color:var(--text);min-height:40px}
-input[type=checkbox]{width:auto;min-height:0}
+input[type=checkbox],input[type=radio]{width:auto;min-height:0}
 textarea{resize:vertical}
 label{display:block;font-weight:600;margin-bottom:.2rem;font-size:.92rem}
 label.inline{display:inline-flex;gap:.4rem;align-items:center;font-weight:400;margin:0}
@@ -788,20 +788,51 @@ views.usuarios = async () => {
     Api.ler("quadro_membros", { select: "*" })
   ]);
   S.usuarios = usuarios;
-  const papelNo = (uid, qid) => { const m = membros.find(x => x.usuario_id === uid && x.quadro_id === qid); return m ? m.papel : ""; };
+  S.membrosUsr = membros;
   const linhas = usuarios.map(u => `<tr>
     <td><b>${esc(u.usuario)}</b></td>
     <td><input type="text" value="${esc(u.nome)}" data-u="nome" data-id="${esc(u.id)}" aria-label="Nome de ${esc(u.usuario)}" style="min-width:150px"></td>
     <td><select data-u="papel" data-id="${esc(u.id)}" aria-label="Papel de ${esc(u.usuario)}">${opt("usuario", "Usuário", u.papel)}${opt("admin", "Administrador", u.papel)}</select></td>
     <td><label class="inline"><input type="checkbox" data-u="ativo" data-id="${esc(u.id)}" ${u.ativo ? "checked" : ""}> Ativo</label></td>
     <td><button type="button" class="small" data-acao="usr-senha" data-id="${esc(u.id)}">Nova senha</button></td>
-    ${S.todosQuadros.map(q => `<td><select data-um="${esc(q.id)}" data-id="${esc(u.id)}" aria-label="Acesso de ${esc(u.usuario)} a ${esc(q.nome)}">${opt("", "Sem acesso", papelNo(u.id, q.id))}${opt("editor", "Edita", papelNo(u.id, q.id))}${opt("leitor", "Só lê", papelNo(u.id, q.id))}</select></td>`).join("")}</tr>`).join("");
+    <td><button type="button" class="small" data-acao="usr-acessos" data-id="${esc(u.id)}">Acessos</button> <span class="muted">${u.papel === "admin" ? "todas" : membros.filter(m => m.usuario_id === u.id).length + " de " + S.todosQuadros.length}</span></td>
+  </tr>`).join("");
   return cabecalho("Usuários", "Quem pode entrar e o que cada um acessa. Quem está inativo perde o acesso na hora, e o histórico dele continua guardado.", `<button type="button" class="primary" data-acao="usr-novo">Novo usuário</button>`) +
-    `<div class="panel tabela"><table><thead><tr><th>Usuário</th><th>Nome</th><th>Papel</th><th>Situação</th><th>Senha</th>${S.todosQuadros.map(q => `<th>${esc(q.nome)}</th>`).join("")}</tr></thead><tbody>${linhas}</tbody></table>
-      <p class="muted" style="margin:.75rem 0 0">Administrador acessa todas as áreas. As mudanças valem assim que você altera cada campo.</p></div>
+    `<div class="panel tabela"><table><thead><tr><th>Usuário</th><th>Nome</th><th>Papel</th><th>Situação</th><th>Senha</th><th>Áreas</th></tr></thead><tbody>${linhas}</tbody></table>
+      <p class="muted" style="margin:.75rem 0 0">Administrador acessa todas as áreas. Nome, papel e situação valem assim que você altera. Em Acessos você marca o que cada pessoa pode fazer em cada área.</p></div>
     <div class="panel"><h2>Como entregar o acesso</h2>
       <p style="margin:0">Use <b>Novo usuário</b>: o sistema cria o login, libera as áreas e gera uma mensagem pronta com o link, o usuário e a senha para você enviar à pessoa. No primeiro acesso ela é obrigada a trocar a senha. Para encerrar um acesso, desmarque <b>Ativo</b>.</p></div>`;
 };
+
+function abrirAcessos(id) {
+  const u = S.usuarios.find(x => x.id === id); if (!u) return;
+  const atual = q => { const m = (S.membrosUsr || []).find(x => x.usuario_id === id && x.quadro_id === q); return m ? m.papel : ""; };
+  const adm = u.papel === "admin";
+  const linhas = S.todosQuadros.map(q => {
+    const v = adm ? "editor" : atual(q.id), nm = "ac-" + q.id;
+    const r = (val, rot) => `<label class="inline" style="margin-right:.9rem;white-space:nowrap"><input type="radio" name="${esc(nm)}" value="${val}" ${v === val ? "checked" : ""} ${adm ? "disabled" : ""}> ${rot}</label>`;
+    return `<div style="padding:.5rem 0;border-bottom:1px solid var(--line)"><div><b>${esc(q.nome)}</b>${q.ativo === false ? ' <span class="muted">(desativada)</span>' : ""}</div><div style="margin-top:.25rem">${r("editor", "Edita")}${r("leitor", "Só lê")}${r("", "Sem acesso")}</div></div>`;
+  }).join("") || `<p class="muted">Nenhuma área criada.</p>`;
+  abrir(`<h2>Acessos de ${esc(u.nome)}</h2>
+    <p class="muted">Usuário: <b>${esc(u.usuario)}</b>. ${adm ? "Administrador acessa e edita todas as áreas." : "Marque uma opção para cada área."}</p>
+    <div style="max-height:55vh;overflow:auto">${linhas}</div>
+    <div class="erro-form" id="ac-erro" role="alert" style="color:var(--danger)"></div>
+    <div class="rodape-dialogo"><button type="button" id="aa-cancelar">${adm ? "Fechar" : "Cancelar"}</button>${adm ? "" : `<button type="button" class="primary" id="aa-salvar">Salvar acessos</button>`}</div>`);
+  $("#aa-cancelar").onclick = fechar;
+  const sv = $("#aa-salvar"); if (!sv) return;
+  sv.onclick = async () => {
+    sv.disabled = true; sv.textContent = "Salvando...";
+    try {
+      for (const q of S.todosQuadros) {
+        const sel = document.querySelector(`input[name="ac-${q.id}"]:checked`), novo = sel ? sel.value : "", ant = atual(q.id);
+        if (novo === ant) continue;
+        if (!novo) await Api.apagar("quadro_membros", { quadro_id: "eq." + q.id, usuario_id: "eq." + id });
+        else await Api.inserir("quadro_membros", { quadro_id: q.id, usuario_id: id, papel: novo }, { on_conflict: "quadro_id,usuario_id" }, "resolution=merge-duplicates,return=minimal");
+      }
+      fechar(); aviso("Acessos salvos."); render();
+    } catch (e) { $("#ac-erro").textContent = e.message; sv.disabled = false; sv.textContent = "Salvar acessos"; }
+  };
+}
 
 const ALFABETO_SENHA = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 function gerarSenha(n = 10) {
@@ -1395,6 +1426,7 @@ document.addEventListener("click", async ev => {
   else if (a === "instalar") instalar();
   else if (a === "usr-novo") novoUsuario();
   else if (a === "usr-senha") novaSenhaUsuario(id);
+  else if (a === "usr-acessos") abrirAcessos(id);
   else if (a === "ag-nav") agNav(Number(el.dataset.d));
   else if (a === "ag-hoje") { FA.ref = hojeBR(); render(); }
   else if (a === "ag-modo") { FA.modo = el.dataset.valor; salvarAgenda(); render(); }
