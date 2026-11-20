@@ -110,6 +110,7 @@ td.n,th.n{text-align:right}
 dialog{border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);color:var(--text);padding:1.1rem;width:min(480px,94vw);max-height:92vh;overflow:auto}
 dialog.larga{width:min(820px,96vw)}
 dialog::backdrop{background:rgba(0,0,0,.5)}
+.barra-cartao{position:sticky;top:-1.1rem;z-index:10;background:var(--surface);margin:-1.1rem -1.1rem .8rem;padding:.7rem 1.1rem;border-bottom:1px solid var(--line);display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;justify-content:space-between}.barra-cartao h2{margin:0;font-size:1.1rem;flex:1 1 180px;min-width:0;overflow-wrap:anywhere}.barra-cartao .acoes{display:flex;gap:.4rem;flex-wrap:wrap}
 .rodape-dialogo{display:flex;justify-content:flex-end;gap:.5rem;margin-top:1rem;flex-wrap:wrap}
 .grade2{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
 .grade3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem}
@@ -1188,7 +1189,11 @@ function desenharCartao() {
   const campoStatus = `<div class="field"><label for="f-status">Situação</label><select id="f-status">${STATUS_ORDEM.map(s => opt(s, STATUS[s], c.status)).join("")}</select></div>`;
   const campoCat = cats.length || fin ? `<div class="field"><label for="f-cat">Categoria</label><select id="f-cat">${opt("", "Sem categoria", c.categoria_id || "")}${cats.map(x => opt(x.id, x.nome, c.categoria_id)).join("")}</select></div>` : "";
   abrir(`<form id="f-cartao" novalidate>
-    <h2>${CA.novo ? "Novo cartão" : esc(c.titulo)}</h2>
+    <div class="barra-cartao"><h2>${CA.novo ? "Novo cartão" : esc(c.titulo)}</h2><div class="acoes">
+      ${CA.novo || !pode ? "" : `<button type="button" class="small" data-acao="arquivar-cartao">${c.arquivado ? "Desarquivar" : "Arquivar"}</button>${admin() ? `<button type="button" class="small danger" data-acao="lixeira-cartao">Enviar para a lixeira</button>` : ""}`}
+      <button type="button" class="small" data-acao="fechar">Fechar</button>
+      ${pode ? `<button type="submit" class="small primary">${CA.novo ? "Criar cartão" : "Salvar cartão"}</button>` : ""}
+    </div></div>
     ${CA.novo ? `<div class="field"><label for="f-area">Área</label><select id="f-area">${editaveis.map(q => opt(q.id, q.nome, c.quadro_id)).join("")}</select></div>` : (admin() && pode ? `<div class="field"><label for="f-area-mover">Área do cartão</label><select id="f-area-mover">${S.todosQuadros.filter(q => q.ativo !== false || q.id === c.quadro_id).map(q => opt(q.id, q.nome, c.quadro_id)).join("")}</select><div class="muted" style="font-size:.85rem">Ao trocar a área, as etiquetas saem e a categoria só fica se existir uma com o mesmo nome na área nova. Responsáveis, datas e histórico continuam.</div></div>` : `<p class="muted" style="margin-top:-.3rem">Área: ${esc(area.nome || "")}${pode ? "" : " (somente leitura)"}</p>`)}
     ${(c.alertas || []).length && !c.conferido ? `<div class="banner" style="margin-bottom:.7rem"><span><b>Para conferir:</b> ${(c.alertas || []).map(a => esc(alertaTxt(a))).join("; ")}.</span></div>` : ""}
     <div class="field"><label for="f-titulo">Título *</label><input id="f-titulo" type="text" value="${esc(c.titulo)}" required><div class="erro-campo" id="e-titulo"></div></div>
@@ -1216,11 +1221,7 @@ function desenharCartao() {
       ${origem.comentarios_no_trello ? `<li><b>Comentários no Trello:</b> ${esc(origem.comentarios_no_trello)} (não vieram na importação)</li>` : ""}
       ${(origem.anexos || []).length ? `<li><b>Anexos no Trello:</b> ${origem.anexos.map(a => esc(a.nome)).join("; ")}</li>` : ""}</ul></details>` : ""}
     <div class="bloco" id="bl-ativ">${blocoAtividade()}</div>`}
-    <div class="rodape-dialogo">
-      ${CA.novo || !pode ? "" : `<button type="button" data-acao="arquivar-cartao">${c.arquivado ? "Desarquivar" : "Arquivar"}</button>${admin() ? `<button type="button" class="danger" data-acao="lixeira-cartao">Enviar para a lixeira</button>` : ""}`}
-      <button type="button" data-acao="fechar">Fechar</button>
-      ${pode ? `<button type="submit" class="primary">${CA.novo ? "Criar cartão" : "Salvar cartão"}</button>` : ""}
-    </div></form>`, true);
+</form>`, true);
   ligarResp();
   const am = $("#f-area-mover"); if (am) am.addEventListener("change", () => atualizarRespPorArea(am.value));
   if (pode) $("#f-titulo").focus();
@@ -1497,6 +1498,7 @@ document.addEventListener("click", async ev => {
   else if (a === "comentar") comentar();
   else if (a === "usar-sugerido") { $("#f-valor").value = valorTxt(CA.c.valor_sugerido); }
   else if (a === "arquivar-cartao") {
+    if (!CA.c.arquivado && !(await confirmar(`Arquivar "${CA.c.titulo}"? Ele sai do painel e do Kanban, mas continua no sistema e pode ser desarquivado.`, "Arquivar", false))) return;
     try { const r = await Api.alterar("cartoes", { id: "eq." + CA.c.id, versao: "eq." + CA.c.versao }, { arquivado: !CA.c.arquivado }); if (!r.length) throw new Error("Outra pessoa alterou este cartão. Feche e abra de novo."); fechar(); aviso(r[0].arquivado ? "Cartão arquivado." : "Cartão desarquivado."); await carregarQuadro(); render(); } catch (e) { erro(e); }
   }
   else if (a === "lixeira-cartao") {
