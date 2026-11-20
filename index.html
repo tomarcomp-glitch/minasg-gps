@@ -834,6 +834,7 @@ function abrirAcessos(id) {
   };
 }
 
+const FUNCAO_USUARIOS = "clever-endpoint";
 const ALFABETO_SENHA = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 function gerarSenha(n = 10) {
   const b = new Uint32Array(n); crypto.getRandomValues(b);
@@ -841,7 +842,7 @@ function gerarSenha(n = 10) {
 }
 const linkDoApp = () => location.href.split("#")[0].split("?")[0];
 async function chamarFuncaoUsuarios(corpo) {
-  try { return await Api.funcao("admin-usuarios", corpo); }
+  try { return await Api.funcao(FUNCAO_USUARIOS, corpo); }
   catch (e) {
     if (e.status === 404) throw new Error("A função que cria usuários ainda não foi publicada no Supabase. Siga o passo a passo de publicação da função admin-usuarios.");
     if (e.status === 401) throw new Error("O Supabase recusou o acesso à função (401). Confira se a função admin-usuarios está publicada com \"Verify JWT\" desligado, ou entre de novo no aplicativo.");
