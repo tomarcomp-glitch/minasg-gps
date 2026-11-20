@@ -523,13 +523,15 @@ const subAtualizado = () => S.atualizadoEm ? `Atualizado às ${S.atualizadoEm.to
 
 const PALETA = [["Azul","#2f6fd6"],["Azul-claro","#1aa3b8"],["Verde","#4caf50"],["Lima","#7fb82a"],["Amarelo","#e0b100"],["Laranja","#e8710a"],["Vermelho","#d64545"],["Rosa","#e0568f"],["Roxo","#8e5bd6"],["Marrom","#8b5e3c"],["Cinza","#6b7280"],["Preto","#1f2937"]];
 const rgbDe = h => { const n = parseInt(h.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
-const corPaleta = hex => { if (!/^#[0-9a-f]{6}$/i.test(hex || "")) return null; const a = rgbDe(hex); let best = null, d0 = 1e9; PALETA.forEach(p => { const b = rgbDe(p[1]), d = (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2; if (d < d0) { d0 = d; best = p; } }); return best; };
+const EN_PT = { red: "Vermelho", blue: "Azul", green: "Verde", orange: "Laranja", purple: "Roxo", yellow: "Amarelo", sky: "Azul-claro", lime: "Lima", pink: "Rosa", black: "Preto", gray: "Cinza", grey: "Cinza", brown: "Marrom" };
+const corPaleta = v => { const s = String(v || "").trim().toLowerCase(); if (EN_PT[s]) return PALETA.find(p => p[0] === EN_PT[s]); if (!/^#[0-9a-f]{6}$/.test(s)) return null; const a = rgbDe(s); let best = null, d0 = 1e9; PALETA.forEach(p => { const b = rgbDe(p[1]), d = (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2; if (d < d0) { d0 = d; best = p; } }); return best; };
 const nomeCor = hex => { const p = corPaleta(hex); return p ? p[0] : ""; };
 const corTexto = hex => { const m = /^#([0-9a-f]{6})$/i.exec(hex || ""); if (!m) return "#fff"; const n = parseInt(m[1], 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255; return (0.299 * r + 0.587 * g + 0.114 * b) > 160 ? "#111" : "#fff"; };
 const chipCategoria = (id, cartaoId) => {
   const c = id ? S.categorias.find(x => x.id === id) : null; if (!c) return "";
   const eid = cartaoId && (S.etq.get(cartaoId) || [])[0], et = eid && S.etiquetas.find(x => x.id === eid);
-  const cor = /^#[0-9a-f]{6}$/i.test(c.cor || "") ? c.cor : (et && /^#[0-9a-f]{6}$/i.test(et.cor || "") ? et.cor : "#6b7280");
+  const pe = et && corPaleta(et.cor), pcat = corPaleta(c.cor);
+  const cor = pe ? pe[1] : (pcat ? pcat[1] : "#6b7280");
   return `<span class="catchip" style="background:${cor};color:${corTexto(cor)}" title="Categoria: ${esc(c.nome)}">${esc(c.nome)}</span>`;
 };
 const FILTROS_ABERTOS = { painel: matchMedia("(min-width: 821px)").matches, kanban: matchMedia("(min-width: 821px)").matches };
@@ -1332,7 +1334,7 @@ function desenharCartao() {
     <div class="grade2"><div class="field"><label for="f-hini">Hora de início (opcional)</label><input id="f-hini" type="time" value="${esc(horaTxt(c.hora_prevista))}"></div>
       <div class="field"><label for="f-hfim">Hora de término (opcional)</label><input id="f-hfim" type="time" value="${esc(horaTxt(c.hora_fim))}"></div></div><div class="erro-campo" id="e-hora"></div>
     <div class="field"><label>Responsáveis (funcionários)</label><div class="muted" style="font-size:.85rem">Aparecem só as pessoas com acesso à área do cartão. Para incluir alguém de outra função, libere antes em Usuários > Acessos.</div><div id="bl-resp">${blocoResponsaveis(c.quadro_id)}</div></div>
-    ${etqs.length ? `<div class="field"><label>Etiqueta (uma só)</label><div class="checks"><label class="inline"><input type="radio" name="f-etq" value="" ${CA.etq.length ? "" : "checked"}> Nenhuma</label>${etqs.map(e => `<label class="inline"><input type="radio" name="f-etq" data-etq="${esc(e.id)}" value="${esc(e.id)}" ${CA.etq[0] === e.id ? "checked" : ""}> <span class="bolinha" style="background:${esc(e.cor)}"></span> ${esc(nomeCor(e.cor) || e.nome || e.cor)}${e.nome && nomeCor(e.cor) && e.nome.toLowerCase() !== nomeCor(e.cor).toLowerCase() ? ` (${esc(e.nome)})` : ""}</label>`).join("")}</div></div>` : ""}
+    ${etqs.length ? `<div class="field"><label>Etiqueta (uma só)</label><div class="checks"><label class="inline"><input type="radio" name="f-etq" value="" ${CA.etq.length ? "" : "checked"}> Nenhuma</label>${etqs.map(e => `<label class="inline"><input type="radio" name="f-etq" data-etq="${esc(e.id)}" value="${esc(e.id)}" ${CA.etq[0] === e.id ? "checked" : ""}> <span class="bolinha" style="background:${esc((corPaleta(e.cor) || [0, e.cor])[1])}"></span> ${esc(nomeCor(e.cor) || e.nome || e.cor)}${e.nome && nomeCor(e.cor) && !EN_PT[String(e.nome).trim().toLowerCase()] && e.nome.toLowerCase() !== nomeCor(e.cor).toLowerCase() ? ` (${esc(e.nome)})` : ""}</label>`).join("")}</div></div>` : ""}
     ${fin || !c.conferido ? `<div class="field"><label class="inline"><input type="checkbox" id="f-conf" ${c.conferido ? "checked" : ""}> Cartão conferido</label></div>` : ""}
     <div class="bloco" id="bl-datas">${blocoDatas()}</div>
     ${CA.novo ? "" : `<div class="bloco" id="bl-coment">${blocoComentarios()}</div>
