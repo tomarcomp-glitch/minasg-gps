@@ -100,6 +100,8 @@ label.inline{display:inline-flex;gap:.4rem;align-items:center;font-weight:400;ma
 .kcol h2{display:flex;justify-content:space-between;gap:.5rem;font-size:.98rem}
 .kcard{border:1px solid var(--line);border-left:4px solid var(--line);border-radius:var(--radius);background:var(--bg);padding:.4rem .5rem;margin-bottom:.45rem;cursor:grab}
 .kcard.atras{border-left-color:var(--danger)}
+.khead{display:flex;gap:.4rem;align-items:flex-start;justify-content:space-between}.khead .kabrir{flex:1;min-width:0}
+.catchip{display:inline-block;flex:none;max-width:48%;padding:.05rem .5rem;border-radius:999px;font-size:.75rem;font-weight:600;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}.linha .t .catchip{margin-left:.3rem;max-width:60%}
 .kcard .kabrir{display:block;width:100%;text-align:left;border:0;background:transparent;padding:0;min-height:0;font-weight:600}
 .kcard .kmeta{display:flex;justify-content:space-between;gap:.4rem;align-items:center;margin-top:.25rem;font-size:.85rem;color:var(--muted)}
 .tabela{overflow-x:auto}
@@ -519,6 +521,12 @@ function cabecalho(titulo, sub, extra = "") {
 const botoesTopo = () => `<button type="button" data-acao="atualizar" title="Buscar de novo no servidor">Atualizar</button>${quadroAtual() && podeEditar(S.quadroId) ? `<button type="button" class="primary" data-acao="novo">Novo cartão</button>` : ""}`;
 const subAtualizado = () => S.atualizadoEm ? `Atualizado às ${S.atualizadoEm.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}. A tela se atualiza sozinha a cada 30 segundos.` : "";
 
+const corTexto = hex => { const m = /^#([0-9a-f]{6})$/i.exec(hex || ""); if (!m) return "#fff"; const n = parseInt(m[1], 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255; return (0.299 * r + 0.587 * g + 0.114 * b) > 160 ? "#111" : "#fff"; };
+const chipCategoria = id => {
+  const c = id ? S.categorias.find(x => x.id === id) : null; if (!c) return "";
+  const cor = /^#[0-9a-f]{6}$/i.test(c.cor || "") ? c.cor : "#6b7280";
+  return `<span class="catchip" style="background:${cor};color:${corTexto(cor)}" title="Categoria: ${esc(c.nome)}">${esc(c.nome)}</span>`;
+};
 const FILTROS_ABERTOS = { painel: matchMedia("(min-width: 821px)").matches, kanban: matchMedia("(min-width: 821px)").matches };
 const filtrosRecolhiveis = (ch, html) => `<details class="filtros-det" data-det="${ch}"${FILTROS_ABERTOS[ch] ? " open" : ""}><summary>Filtros</summary>${html}</details>`;
 document.addEventListener("toggle", ev => { const d = ev.target; if (d && d.dataset && d.dataset.det) FILTROS_ABERTOS[d.dataset.det] = d.open; }, true);
@@ -526,10 +534,10 @@ function linhaCartao(c, hoje) {
   const feito = c.status === "concluido";
   const rel = relativo(c, hoje);
   const fin = !!(areaDe(c.quadro_id) || {}).usa_financeiro;
-  const meta = [faixaHora(c), c.empresa, nomeCategoria(c.categoria_id), ...destaques(c), respTxt(c), STATUS[c.status]].filter(Boolean).map(esc).join(" · ");
+  const meta = [faixaHora(c), c.empresa, ...destaques(c), respTxt(c), STATUS[c.status]].filter(Boolean).map(esc).join(" · ");
   return `<div class="linha${feito ? " feito" : ""}">
     ${feito ? `<button type="button" class="ck" disabled aria-label="Concluído">✓</button>` : `<button type="button" class="ck" data-acao="concluir" data-id="${esc(c.id)}" aria-label="Marcar como concluído: ${esc(c.titulo)}" title="Marcar como concluído">○</button>`}
-    <button type="button" class="abrir" data-acao="abrir" data-id="${esc(c.id)}"><span class="t">${esc(c.titulo)}</span>
+    <button type="button" class="abrir" data-acao="abrir" data-id="${esc(c.id)}"><span class="t">${esc(c.titulo)}${chipCategoria(c.categoria_id) ? " " + chipCategoria(c.categoria_id) : ""}</span>
       <span class="m">${meta}${rel ? ` · <b${ehAtrasado(c, hoje) ? ' style="color:var(--danger)"' : ""}>${esc(rel)}</b>` : ""}${c.conferido ? "" : " · não conferido"}</span></button>
     <div class="n">${fin ? brl(c.valor) : ""}</div>
     ${fin ? `<span class="tag ${c.tipo === "receber" ? "t-receber" : c.tipo === "pagar" ? "t-pagar" : ""}">${esc(TIPOS[c.tipo] || "—")}</span>` : "<span></span>"}
@@ -570,7 +578,7 @@ views.kanban = () => {
     const atras = !arq && ehAtrasado(c, hoje);
     const extra = [faixaHora(c), ...destaques(c), respTxt(c)].filter(Boolean).map(esc).join(" · ");
     return `<article class="kcard${atras ? " atras" : ""}${arq ? " arquivado" : ""}"${edita && mouse ? ' draggable="true"' : ""} data-id="${esc(c.id)}" data-edita="${edita ? 1 : 0}">
-      <button type="button" class="kabrir" data-acao="abrir" data-id="${esc(c.id)}">${esc(c.titulo)}</button>
+      <div class="khead"><button type="button" class="kabrir" data-acao="abrir" data-id="${esc(c.id)}">${esc(c.titulo)}</button>${chipCategoria(c.categoria_id)}</div>
       <div class="kmeta"><span>${c.data_prevista ? "Término " + dataCurta(c.data_prevista) : "Sem data"}${c.data_inicio ? " · início " + dataCurta(c.data_inicio) : ""}</span>${fin ? `<span class="n">${brl(c.valor)}</span>` : ""}</div>
       ${extra ? `<div class="kmeta"><span>${extra}</span></div>` : ""}
       <div class="kmeta"><span>${fin ? `<span class="tag ${c.tipo === "receber" ? "t-receber" : c.tipo === "pagar" ? "t-pagar" : ""}">${esc(TIPOS[c.tipo] || "—")}</span>` : ""}${arq ? ` <span class="tag">${esc(STATUS[c.status])}</span>` : ""}</span><span>${atras ? `<span class="tag t-perigo">atrasado</span>` : ""}${c.conferido ? "" : ` <span class="tag t-alerta">conferir</span>`}</span></div>
@@ -987,16 +995,29 @@ async function moverLote(ids) {
 
 /* ---- Categorias de cada área (administrador) ---- */
 let CG = null;
+const recentes = () => [...S.categorias].sort((a, b) => String(b.criado_em || "").localeCompare(String(a.criado_em || "")));
+function corInicialCategoria(nome) {
+  const n = String(nome || "").trim().toLowerCase(), cor = c => /^#[0-9a-f]{6}$/i.test(c.cor || "") ? c.cor : null;
+  const igual = n && recentes().find(c => c.nome.trim().toLowerCase() === n && cor(c));
+  if (igual) return cor(igual);
+  const ultima = recentes().find(cor);
+  return ultima ? cor(ultima) : "#1f5f8b";
+}
+const msgSemCor = e => /\bcor\b|criado_em|schema cache/i.test(e.message) ? "Falta rodar o SQL da atualização 4 no Supabase para guardar a cor das categorias." : null;
+async function corCategoria(id, cor) {
+  try { await Api.alterar("categorias", { id: "eq." + id }, { cor }); await recarregarCategorias(); render(); }
+  catch (e) { desenharCategorias(msgSemCor(e) || msgCategoria(e)); }
+}
 const usoCategoria = id => S.cartoes.filter(c => c.categoria_id === id).length;
 async function recarregarCategorias() {
   S.categorias = await Api.ler("categorias", { select: "*", order: "nome.asc" });
 }
-function refrescarSelectCategoria() {
+function refrescarSelectCategoria(escolher) {
   const sel = $("#f-cat"); if (!sel || !CA) return;
-  const v = sel.value;
+  const v = escolher || sel.value;
   sel.innerHTML = opt("", "Sem categoria", v) + categoriasArea(CA.c.quadro_id).map(x => opt(x.id, x.nome, v)).join("");
 }
-function fecharCategorias() { fechar2(); CG = null; refrescarSelectCategoria(); render(); }
+function fecharCategorias() { const u = CG && CG.ultima; fechar2(); CG = null; refrescarSelectCategoria(u); render(); }
 async function abrirCategorias(qid) {
   CG = { qid };
   try { await recarregarCategorias(); } catch (e) { erro(e); return; }
@@ -1007,14 +1028,16 @@ function desenharCategorias(msg) {
   abrir2(`<h2>Categorias de ${esc(q.nome || "")}</h2>
     <p class="muted">Use para centros de custo, por exemplo Fornecedores, Impostos, Salários, Prestação de Serviços. O nome muda ao sair do campo. Cartões que usam a categoria acompanham o novo nome.</p>
     <div style="max-height:45vh;overflow:auto">${lista.map(x => `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.4rem;align-items:center;margin-bottom:.4rem">
-      <input type="text" value="${esc(x.nome)}" data-cg="nome" data-id="${esc(x.id)}" aria-label="Nome da categoria" maxlength="80">
+      <div style="display:flex;gap:.4rem;align-items:center"><input type="color" value="${esc(/^#[0-9a-f]{6}$/i.test(x.cor || "") ? x.cor : "#6b7280")}" data-cg="cor" data-id="${esc(x.id)}" aria-label="Cor da categoria ${esc(x.nome)}" style="width:44px;min-height:36px;padding:2px;flex:none"><input type="text" value="${esc(x.nome)}" data-cg="nome" data-id="${esc(x.id)}" aria-label="Nome da categoria" maxlength="80" style="flex:1;min-width:0"></div>
       <span class="muted" style="white-space:nowrap">${usoCategoria(x.id)} cartões</span>
       <button type="button" class="small danger" data-cg="excluir" data-id="${esc(x.id)}">Excluir</button></div>`).join("") || `<p class="muted">Nenhuma categoria ainda.</p>`}</div>
-    <div class="field" style="margin-top:.7rem"><label for="cg-nova">Nova categoria</label><div style="display:flex;gap:.4rem"><input id="cg-nova" type="text" maxlength="80" placeholder="Ex.: Fornecedores" style="flex:1"><button type="button" class="primary" id="cg-add">Adicionar</button></div></div>
+    <div class="field" style="margin-top:.7rem"><label for="cg-nova">Nova categoria</label><div style="display:flex;gap:.4rem;align-items:center"><input id="cg-cor" type="color" value="${esc(corInicialCategoria(""))}" aria-label="Cor da nova categoria" style="width:44px;min-height:36px;padding:2px;flex:none"><input id="cg-nova" type="text" maxlength="80" placeholder="Ex.: Fornecedores" style="flex:1;min-width:0"><button type="button" class="primary" id="cg-add">Adicionar</button></div><div class="muted" style="font-size:.85rem">A cor aparece no cartão. Se já existe uma categoria com o mesmo nome em outra área, a cor dela é sugerida.</div></div>
     <div class="erro-campo" id="cg-erro" role="alert">${esc(msg || "")}</div>
     <div class="rodape-dialogo"><button type="button" id="cg-fechar">Fechar</button></div>`);
-  $("#cg-fechar").onclick = fecharCategorias; dlg2.oncancel = () => { CG = null; refrescarSelectCategoria(); render(); };
+  $("#cg-fechar").onclick = fecharCategorias; dlg2.oncancel = () => { const u = CG && CG.ultima; CG = null; refrescarSelectCategoria(u); render(); };
   $("#cg-add").onclick = adicionarCategoria;
+  $("#cg-nova").addEventListener("input", () => { $("#cg-cor").value = corInicialCategoria($("#cg-nova").value); });
+  $$("[data-cg=cor]", dlg2).forEach(i => i.addEventListener("change", () => corCategoria(i.dataset.id, i.value)));
   $("#cg-nova").addEventListener("keydown", ev => { if (ev.key === "Enter") { ev.preventDefault(); adicionarCategoria(); } });
   $$("[data-cg=nome]", dlg2).forEach(i => i.addEventListener("change", () => renomearCategoria(i.dataset.id, i.value)));
   $$("[data-cg=excluir]", dlg2).forEach(b => b.addEventListener("click", () => excluirCategoria(b.dataset.id)));
@@ -1023,8 +1046,8 @@ const msgCategoria = e => /duplicate key|unique/i.test(e.message) || /Já existe
 async function adicionarCategoria() {
   const nome = $("#cg-nova").value.trim();
   if (!nome) { $("#cg-erro").textContent = "Escreva o nome da categoria."; return; }
-  try { await Api.inserir("categorias", { quadro_id: CG.qid, nome }, null, "return=minimal"); await recarregarCategorias(); desenharCategorias(); const i = $("#cg-nova"); if (i) i.focus(); }
-  catch (e) { $("#cg-erro").textContent = msgCategoria(e); }
+  try { const [nova] = await Api.inserir("categorias", { quadro_id: CG.qid, nome, cor: $("#cg-cor").value }); if (nova) CG.ultima = nova.id; await recarregarCategorias(); desenharCategorias(); const i = $("#cg-nova"); if (i) i.focus(); }
+  catch (e) { $("#cg-erro").textContent = msgSemCor(e) || msgCategoria(e); }
 }
 async function renomearCategoria(id, valor) {
   const nome = valor.trim(), atual = S.categorias.find(x => x.id === id);
