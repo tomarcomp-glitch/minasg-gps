@@ -1110,25 +1110,27 @@ function cartaoVazio(qid, status, data) {
 async function carregarMembrosAreas() {
   try { S.membrosAreas = (await Api.rpc("membros_das_areas")) || []; } catch (e) { S.membrosAreas = null; }
 }
-function blocoResponsaveis(c) {
-  const ativos = S.usuarios.filter(u => u.ativo || CA.resp.includes(u.id));
-  const chk = u => `<label class="inline"><input type="checkbox" data-resp="${esc(u.id)}" ${CA.resp.includes(u.id) ? "checked" : ""}> ${esc(u.nome)}</label>`;
+function blocoResponsaveis(qid) {
+  const sel = CA.respSel || CA.resp;
+  const ativos = S.usuarios.filter(u => u.ativo || sel.includes(u.id));
+  const chk = u => `<label class="inline"><input type="checkbox" data-resp="${esc(u.id)}" ${sel.includes(u.id) ? "checked" : ""}> ${esc(u.nome)}</label>`;
   const cab = t => `<div style="margin:.55rem 0 .2rem;font-weight:600">${esc(t)}</div>`;
   if (!S.membrosAreas) return `<div class="checks">${ativos.map(chk).join("") || "<span class='muted'>Nenhum usuário.</span>"}</div>`;
-  const naArea = (u, qid) => S.membrosAreas.some(m => m.quadro_id === qid && m.usuario_id === u.id);
-  const areas = [areaDe(c.quadro_id), ...S.todosQuadros.filter(q => q.id !== c.quadro_id && q.ativo !== false)].filter(Boolean);
-  let html = "", listados = new Set();
-  areas.forEach(q => {
-    const us = ativos.filter(u => u.papel !== "admin" && naArea(u, q.id));
-    if (!us.length && q.id !== c.quadro_id) return;
-    us.forEach(u => listados.add(u.id));
-    html += cab(q.nome + (q.id === c.quadro_id ? " (área deste cartão)" : "")) + `<div class="checks">${us.map(chk).join("") || "<span class='muted'>Ninguém tem acesso a esta área ainda.</span>"}</div>`;
-  });
+  const area = areaDe(qid) || {};
+  const naArea = ativos.filter(u => u.papel !== "admin" && S.membrosAreas.some(m => m.quadro_id === qid && m.usuario_id === u.id));
   const adm = ativos.filter(u => u.papel === "admin");
-  if (adm.length) { adm.forEach(u => listados.add(u.id)); html += cab("Administradores (acessam todas as áreas)") + `<div class="checks">${adm.map(chk).join("")}</div>`; }
-  const resto = ativos.filter(u => !listados.has(u.id));
-  if (resto.length) html += cab(admin() ? "Sem acesso a nenhuma área" : "Outras pessoas") + `<div class="checks">${resto.map(chk).join("")}</div>`;
-  return html || "<span class='muted'>Nenhum usuário.</span>";
+  const fora = ativos.filter(u => u.papel !== "admin" && !naArea.includes(u) && sel.includes(u.id));
+  let html = cab("Com acesso a " + (area.nome || "esta área")) + `<div class="checks">${naArea.map(chk).join("") || "<span class='muted'>Ninguém tem acesso a esta área ainda. Libere em Usuários > Acessos.</span>"}</div>`;
+  if (adm.length) html += cab("Administradores (acessam todas as áreas)") + `<div class="checks">${adm.map(chk).join("")}</div>`;
+  if (fora.length) html += cab("Já são responsáveis, mas não têm acesso a esta área") + `<div class="checks">${fora.map(chk).join("")}</div>`;
+  return html;
+}
+function ligarResp() {
+  $$("[data-resp]", dlg).forEach(cb => cb.addEventListener("change", () => $$("[data-resp]", dlg).forEach(o => { if (o.dataset.resp === cb.dataset.resp) o.checked = cb.checked; })));
+}
+function atualizarRespPorArea(qid) {
+  CA.respSel = [...new Set($$("[data-resp]", dlg).filter(x => x.checked).map(x => x.dataset.resp))];
+  const el = $("#bl-resp"); if (el) { el.innerHTML = blocoResponsaveis(qid); ligarResp(); }
 }
 const temAcessoArea = (uid, qid) => { const u = S.usuarios.find(x => x.id === uid); return !!u && (u.papel === "admin" || !S.membrosAreas || S.membrosAreas.some(m => m.quadro_id === qid && m.usuario_id === uid)); };
 async function abrirCartao(id, novoStatus, pre) {
@@ -1203,7 +1205,7 @@ function desenharCartao() {
     ${CA.novo ? `<div class="grade2"><div class="field"><label for="f-ini">Início</label><input id="f-ini" type="date" value="${esc(c.data_inicio || "")}"></div><div class="field"><label for="f-prev">Término previsto</label><input id="f-prev" type="date" value="${esc(c.data_prevista || "")}"></div></div>` : ""}
     <div class="grade2"><div class="field"><label for="f-hini">Hora de início (opcional)</label><input id="f-hini" type="time" value="${esc(horaTxt(c.hora_prevista))}"></div>
       <div class="field"><label for="f-hfim">Hora de término (opcional)</label><input id="f-hfim" type="time" value="${esc(horaTxt(c.hora_fim))}"></div></div><div class="erro-campo" id="e-hora"></div>
-    <div class="field"><label>Responsáveis (funcionários)</label><div class="muted" style="font-size:.85rem">Quem está fora da área do cartão não consegue ver este cartão.</div>${blocoResponsaveis(c)}</div>
+    <div class="field"><label>Responsáveis (funcionários)</label><div class="muted" style="font-size:.85rem">Aparecem só as pessoas com acesso à área do cartão. Para incluir alguém de outra função, libere antes em Usuários > Acessos.</div><div id="bl-resp">${blocoResponsaveis(c.quadro_id)}</div></div>
     ${etqs.length ? `<div class="field"><label>Etiquetas</label><div class="checks">${etqs.map(e => `<label class="inline"><input type="checkbox" data-etq="${esc(e.id)}" ${CA.etq.includes(e.id) ? "checked" : ""}> <span class="bolinha" style="background:${esc(e.cor)}"></span> ${esc(e.nome || e.cor)}</label>`).join("")}</div></div>` : ""}
     ${fin || !c.conferido ? `<div class="field"><label class="inline"><input type="checkbox" id="f-conf" ${c.conferido ? "checked" : ""}> Cartão conferido</label></div>` : ""}
     <div class="bloco" id="bl-datas">${blocoDatas()}</div>
@@ -1219,7 +1221,8 @@ function desenharCartao() {
       <button type="button" data-acao="fechar">Fechar</button>
       ${pode ? `<button type="submit" class="primary">${CA.novo ? "Criar cartão" : "Salvar cartão"}</button>` : ""}
     </div></form>`, true);
-  $$("[data-resp]", dlg).forEach(cb => cb.addEventListener("change", () => $$("[data-resp]", dlg).forEach(o => { if (o.dataset.resp === cb.dataset.resp) o.checked = cb.checked; })));
+  ligarResp();
+  const am = $("#f-area-mover"); if (am) am.addEventListener("change", () => atualizarRespPorArea(am.value));
   if (pode) $("#f-titulo").focus();
   else $$("#f-cartao input, #f-cartao select, #f-cartao textarea").forEach(el => { el.disabled = true; });
 }
