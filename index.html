@@ -521,10 +521,15 @@ function cabecalho(titulo, sub, extra = "") {
 const botoesTopo = () => `<button type="button" data-acao="atualizar" title="Buscar de novo no servidor">Atualizar</button>${quadroAtual() && podeEditar(S.quadroId) ? `<button type="button" class="primary" data-acao="novo">Novo cartão</button>` : ""}`;
 const subAtualizado = () => S.atualizadoEm ? `Atualizado às ${S.atualizadoEm.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}. A tela se atualiza sozinha a cada 30 segundos.` : "";
 
+const PALETA = [["Azul","#2f6fd6"],["Azul-claro","#1aa3b8"],["Verde","#4caf50"],["Lima","#7fb82a"],["Amarelo","#e0b100"],["Laranja","#e8710a"],["Vermelho","#d64545"],["Rosa","#e0568f"],["Roxo","#8e5bd6"],["Marrom","#8b5e3c"],["Cinza","#6b7280"],["Preto","#1f2937"]];
+const rgbDe = h => { const n = parseInt(h.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
+const corPaleta = hex => { if (!/^#[0-9a-f]{6}$/i.test(hex || "")) return null; const a = rgbDe(hex); let best = null, d0 = 1e9; PALETA.forEach(p => { const b = rgbDe(p[1]), d = (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2; if (d < d0) { d0 = d; best = p; } }); return best; };
+const nomeCor = hex => { const p = corPaleta(hex); return p ? p[0] : ""; };
 const corTexto = hex => { const m = /^#([0-9a-f]{6})$/i.exec(hex || ""); if (!m) return "#fff"; const n = parseInt(m[1], 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255; return (0.299 * r + 0.587 * g + 0.114 * b) > 160 ? "#111" : "#fff"; };
-const chipCategoria = id => {
+const chipCategoria = (id, cartaoId) => {
   const c = id ? S.categorias.find(x => x.id === id) : null; if (!c) return "";
-  const cor = /^#[0-9a-f]{6}$/i.test(c.cor || "") ? c.cor : "#6b7280";
+  const eid = cartaoId && (S.etq.get(cartaoId) || [])[0], et = eid && S.etiquetas.find(x => x.id === eid);
+  const cor = /^#[0-9a-f]{6}$/i.test(c.cor || "") ? c.cor : (et && /^#[0-9a-f]{6}$/i.test(et.cor || "") ? et.cor : "#6b7280");
   return `<span class="catchip" style="background:${cor};color:${corTexto(cor)}" title="Categoria: ${esc(c.nome)}">${esc(c.nome)}</span>`;
 };
 const FILTROS_ABERTOS = { painel: matchMedia("(min-width: 821px)").matches, kanban: matchMedia("(min-width: 821px)").matches };
@@ -537,7 +542,7 @@ function linhaCartao(c, hoje) {
   const meta = [faixaHora(c), c.empresa, ...destaques(c), respTxt(c), STATUS[c.status]].filter(Boolean).map(esc).join(" · ");
   return `<div class="linha${feito ? " feito" : ""}">
     ${feito ? `<button type="button" class="ck" disabled aria-label="Concluído">✓</button>` : `<button type="button" class="ck" data-acao="concluir" data-id="${esc(c.id)}" aria-label="Marcar como concluído: ${esc(c.titulo)}" title="Marcar como concluído">○</button>`}
-    <button type="button" class="abrir" data-acao="abrir" data-id="${esc(c.id)}"><span class="t">${esc(c.titulo)}${chipCategoria(c.categoria_id) ? " " + chipCategoria(c.categoria_id) : ""}</span>
+    <button type="button" class="abrir" data-acao="abrir" data-id="${esc(c.id)}"><span class="t">${esc(c.titulo)}${chipCategoria(c.categoria_id, c.id) ? " " + chipCategoria(c.categoria_id, c.id) : ""}</span>
       <span class="m">${meta}${rel ? ` · <b${ehAtrasado(c, hoje) ? ' style="color:var(--danger)"' : ""}>${esc(rel)}</b>` : ""}${c.conferido ? "" : " · não conferido"}</span></button>
     <div class="n">${fin ? brl(c.valor) : ""}</div>
     ${fin ? `<span class="tag ${c.tipo === "receber" ? "t-receber" : c.tipo === "pagar" ? "t-pagar" : ""}">${esc(TIPOS[c.tipo] || "—")}</span>` : "<span></span>"}
@@ -578,7 +583,7 @@ views.kanban = () => {
     const atras = !arq && ehAtrasado(c, hoje);
     const extra = [faixaHora(c), ...destaques(c), respTxt(c)].filter(Boolean).map(esc).join(" · ");
     return `<article class="kcard${atras ? " atras" : ""}${arq ? " arquivado" : ""}"${edita && mouse ? ' draggable="true"' : ""} data-id="${esc(c.id)}" data-edita="${edita ? 1 : 0}">
-      <div class="khead"><button type="button" class="kabrir" data-acao="abrir" data-id="${esc(c.id)}">${esc(c.titulo)}</button>${chipCategoria(c.categoria_id)}</div>
+      <div class="khead"><button type="button" class="kabrir" data-acao="abrir" data-id="${esc(c.id)}">${esc(c.titulo)}</button>${chipCategoria(c.categoria_id, c.id)}</div>
       <div class="kmeta"><span>${c.data_prevista ? "Término " + dataCurta(c.data_prevista) : "Sem data"}${c.data_inicio ? " · início " + dataCurta(c.data_inicio) : ""}</span>${fin ? `<span class="n">${brl(c.valor)}</span>` : ""}</div>
       ${extra ? `<div class="kmeta"><span>${extra}</span></div>` : ""}
       <div class="kmeta"><span>${fin ? `<span class="tag ${c.tipo === "receber" ? "t-receber" : c.tipo === "pagar" ? "t-pagar" : ""}">${esc(TIPOS[c.tipo] || "—")}</span>` : ""}${arq ? ` <span class="tag">${esc(STATUS[c.status])}</span>` : ""}</span><span>${atras ? `<span class="tag t-perigo">atrasado</span>` : ""}${c.conferido ? "" : ` <span class="tag t-alerta">conferir</span>`}</span></div>
@@ -995,14 +1000,15 @@ async function moverLote(ids) {
 
 /* ---- Categorias de cada área (administrador) ---- */
 let CG = null;
-const recentes = () => [...S.categorias].sort((a, b) => String(b.criado_em || "").localeCompare(String(a.criado_em || "")));
+const recentes = () => S.categorias.map((c, i) => [c, i]).sort((a, b) => String(b[0].criado_em || "").localeCompare(String(a[0].criado_em || "")) || b[1] - a[1]).map(x => x[0]);
 function corInicialCategoria(nome) {
   const n = String(nome || "").trim().toLowerCase(), cor = c => /^#[0-9a-f]{6}$/i.test(c.cor || "") ? c.cor : null;
   const igual = n && recentes().find(c => c.nome.trim().toLowerCase() === n && cor(c));
-  if (igual) return cor(igual);
+  if (igual) { const pi = corPaleta(cor(igual)); return pi ? pi[1] : cor(igual); }
   const ultima = recentes().find(cor);
-  return ultima ? cor(ultima) : "#1f5f8b";
+  const pc = corPaleta(ultima ? cor(ultima) : "#2f6fd6"); return pc ? pc[1] : "#2f6fd6";
 }
+const seletorCor = (id, atual, extra) => { const pa = corPaleta(atual) || PALETA[0]; return `<select ${extra} id="${id}" aria-label="Cor" style="width:9.5rem;flex:none">${PALETA.map(p => `<option value="${p[1]}"${p[1] === pa[1] ? " selected" : ""}>${p[0]}</option>`).join("")}</select>`; };
 const msgSemCor = e => /\bcor\b|criado_em|schema cache/i.test(e.message) ? "Falta rodar o SQL da atualização 4 no Supabase para guardar a cor das categorias." : null;
 async function corCategoria(id, cor) {
   try { await Api.alterar("categorias", { id: "eq." + id }, { cor }); await recarregarCategorias(); render(); }
@@ -1028,10 +1034,10 @@ function desenharCategorias(msg) {
   abrir2(`<h2>Categorias de ${esc(q.nome || "")}</h2>
     <p class="muted">Use para centros de custo, por exemplo Fornecedores, Impostos, Salários, Prestação de Serviços. O nome muda ao sair do campo. Cartões que usam a categoria acompanham o novo nome.</p>
     <div style="max-height:45vh;overflow:auto">${lista.map(x => `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.4rem;align-items:center;margin-bottom:.4rem">
-      <div style="display:flex;gap:.4rem;align-items:center"><input type="color" value="${esc(/^#[0-9a-f]{6}$/i.test(x.cor || "") ? x.cor : "#6b7280")}" data-cg="cor" data-id="${esc(x.id)}" aria-label="Cor da categoria ${esc(x.nome)}" style="width:44px;min-height:36px;padding:2px;flex:none"><input type="text" value="${esc(x.nome)}" data-cg="nome" data-id="${esc(x.id)}" aria-label="Nome da categoria" maxlength="80" style="flex:1;min-width:0"></div>
+      <div style="display:flex;gap:.4rem;align-items:center"><span class="bolinha" style="background:${esc((corPaleta(x.cor) || [0, "#6b7280"])[1])}"></span>${seletorCor("", x.cor, `data-cg="cor" data-id="${esc(x.id)}"`)}<input type="text" value="${esc(x.nome)}" data-cg="nome" data-id="${esc(x.id)}" aria-label="Nome da categoria" maxlength="80" style="flex:1;min-width:0"></div>
       <span class="muted" style="white-space:nowrap">${usoCategoria(x.id)} cartões</span>
       <button type="button" class="small danger" data-cg="excluir" data-id="${esc(x.id)}">Excluir</button></div>`).join("") || `<p class="muted">Nenhuma categoria ainda.</p>`}</div>
-    <div class="field" style="margin-top:.7rem"><label for="cg-nova">Nova categoria</label><div style="display:flex;gap:.4rem;align-items:center"><input id="cg-cor" type="color" value="${esc(corInicialCategoria(""))}" aria-label="Cor da nova categoria" style="width:44px;min-height:36px;padding:2px;flex:none"><input id="cg-nova" type="text" maxlength="80" placeholder="Ex.: Fornecedores" style="flex:1;min-width:0"><button type="button" class="primary" id="cg-add">Adicionar</button></div><div class="muted" style="font-size:.85rem">A cor aparece no cartão. Se já existe uma categoria com o mesmo nome em outra área, a cor dela é sugerida.</div></div>
+    <div class="field" style="margin-top:.7rem"><label for="cg-nova">Nova categoria</label><div style="display:flex;gap:.4rem;align-items:center">${seletorCor("cg-cor", corInicialCategoria(""), "")}<input id="cg-nova" type="text" maxlength="80" placeholder="Ex.: Fornecedores" style="flex:1;min-width:0"><button type="button" class="primary" id="cg-add">Adicionar</button></div><div class="muted" style="font-size:.85rem">A cor aparece no cartão e combina com a etiqueta de mesma cor. Já vem marcada a cor da última categoria cadastrada; se já existe uma categoria com o mesmo nome em outra área, a cor dela é sugerida.</div></div>
     <div class="erro-campo" id="cg-erro" role="alert">${esc(msg || "")}</div>
     <div class="rodape-dialogo"><button type="button" id="cg-fechar">Fechar</button></div>`);
   $("#cg-fechar").onclick = fecharCategorias; dlg2.oncancel = () => { const u = CG && CG.ultima; CG = null; refrescarSelectCategoria(u); render(); };
@@ -1326,7 +1332,7 @@ function desenharCartao() {
     <div class="grade2"><div class="field"><label for="f-hini">Hora de início (opcional)</label><input id="f-hini" type="time" value="${esc(horaTxt(c.hora_prevista))}"></div>
       <div class="field"><label for="f-hfim">Hora de término (opcional)</label><input id="f-hfim" type="time" value="${esc(horaTxt(c.hora_fim))}"></div></div><div class="erro-campo" id="e-hora"></div>
     <div class="field"><label>Responsáveis (funcionários)</label><div class="muted" style="font-size:.85rem">Aparecem só as pessoas com acesso à área do cartão. Para incluir alguém de outra função, libere antes em Usuários > Acessos.</div><div id="bl-resp">${blocoResponsaveis(c.quadro_id)}</div></div>
-    ${etqs.length ? `<div class="field"><label>Etiquetas</label><div class="checks">${etqs.map(e => `<label class="inline"><input type="checkbox" data-etq="${esc(e.id)}" ${CA.etq.includes(e.id) ? "checked" : ""}> <span class="bolinha" style="background:${esc(e.cor)}"></span> ${esc(e.nome || e.cor)}</label>`).join("")}</div></div>` : ""}
+    ${etqs.length ? `<div class="field"><label>Etiqueta (uma só)</label><div class="checks"><label class="inline"><input type="radio" name="f-etq" value="" ${CA.etq.length ? "" : "checked"}> Nenhuma</label>${etqs.map(e => `<label class="inline"><input type="radio" name="f-etq" data-etq="${esc(e.id)}" value="${esc(e.id)}" ${CA.etq[0] === e.id ? "checked" : ""}> <span class="bolinha" style="background:${esc(e.cor)}"></span> ${esc(nomeCor(e.cor) || e.nome || e.cor)}${e.nome && nomeCor(e.cor) && e.nome.toLowerCase() !== nomeCor(e.cor).toLowerCase() ? ` (${esc(e.nome)})` : ""}</label>`).join("")}</div></div>` : ""}
     ${fin || !c.conferido ? `<div class="field"><label class="inline"><input type="checkbox" id="f-conf" ${c.conferido ? "checked" : ""}> Cartão conferido</label></div>` : ""}
     <div class="bloco" id="bl-datas">${blocoDatas()}</div>
     ${CA.novo ? "" : `<div class="bloco" id="bl-coment">${blocoComentarios()}</div>
@@ -1339,6 +1345,11 @@ function desenharCartao() {
 </form>`, true);
   ligarResp();
   const am = $("#f-area-mover"); if (am) am.addEventListener("change", () => atualizarRespPorArea(am.value));
+  const fc = $("#f-cat"); if (fc) fc.addEventListener("change", () => {
+    const cat = S.categorias.find(x => x.id === fc.value), pc = cat && corPaleta(cat.cor); if (!pc) return;
+    const alvo = $$("[data-etq]", dlg).find(r => { const e = S.etiquetas.find(x => x.id === r.dataset.etq), pe = e && corPaleta(e.cor); return pe && pe[0] === pc[0]; });
+    if (alvo) alvo.checked = true;
+  });
   if (pode) $("#f-titulo").focus();
   else $$("#f-cartao input, #f-cartao select, #f-cartao textarea").forEach(el => { el.disabled = true; });
 }
@@ -1369,7 +1380,7 @@ function lerFormulario() {
     conferido: $("#f-conf") ? $("#f-conf").checked : c.conferido,
     hora_prevista: hi, hora_fim: hf, campos,
     resp: [...new Set($$("[data-resp]", dlg).filter(x => x.checked).map(x => x.dataset.resp))],
-    etq: $$("[data-etq]", dlg).filter(x => x.checked).map(x => x.dataset.etq)
+    etq: $$("[data-etq]", dlg).filter(x => x.checked).slice(0, 1).map(x => x.dataset.etq)
   };
   if (fin) { out.tipo = $("#f-tipo").value || null; out.valor = valor; out.empresa = $("#f-empresa").value.trim() || null; }
   return out;
