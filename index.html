@@ -92,6 +92,8 @@ label.inline{display:inline-flex;gap:.4rem;align-items:center;font-weight:400;ma
 .t-alerta{background:var(--warn-soft);border-color:transparent;color:var(--warn)}
 .t-perigo{background:var(--danger-soft);border-color:transparent;color:var(--danger)}
 .totais{display:flex;gap:1.25rem;flex-wrap:wrap;padding:.6rem .2rem;font-variant-numeric:tabular-nums}
+.kanban.com-arq{grid-template-columns:repeat(5,minmax(205px,1fr))}
+.kcol-arq{background:var(--bg);border-style:dashed}.kcard.arquivado{opacity:.85}
 .kanban{display:grid;grid-template-columns:repeat(4,minmax(260px,1fr));gap:.75rem;overflow-x:auto;align-items:start;padding-bottom:.5rem}
 .kcol{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:.6rem;min-height:140px}
 .kcol.sobre{outline:3px dashed var(--accent)}
@@ -158,6 +160,7 @@ body.arrastando-cartao{overscroll-behavior:none}
 .campo-lin{display:grid;grid-template-columns:1.4fr 150px 1.6fr auto;gap:.4rem;align-items:center;margin-bottom:.45rem}
 @media (max-width:820px){
   .kanban{grid-template-columns:repeat(4,80vw)}
+  .kanban.com-arq{grid-template-columns:repeat(5,80vw)}
   .campo-lin{grid-template-columns:1fr;padding-bottom:.5rem;border-bottom:1px solid var(--line)}
   .ag-item{grid-template-columns:78px 1fr}
   .mes .cel{min-height:62px}.mes .chip-ag,.mes .mais{display:none}.mes .conta{display:inline-block}
@@ -562,28 +565,48 @@ views.kanban = () => {
   const hoje = hojeBR(), f = F.kanban, fin = usaFin(), edita = podeEditar(S.quadroId);
   const lista = cartoesArea().filter(c => passa(c, f, hoje));
   const mouse = matchMedia("(pointer: fine)").matches;
+  const mostrarArq = !!f.arquivados;
+  const cardKanban = (c, arq) => {
+    const atras = !arq && ehAtrasado(c, hoje);
+    const extra = [faixaHora(c), ...destaques(c), respTxt(c)].filter(Boolean).map(esc).join(" · ");
+    return `<article class="kcard${atras ? " atras" : ""}${arq ? " arquivado" : ""}"${edita && mouse ? ' draggable="true"' : ""} data-id="${esc(c.id)}" data-edita="${edita ? 1 : 0}">
+      <button type="button" class="kabrir" data-acao="abrir" data-id="${esc(c.id)}">${esc(c.titulo)}</button>
+      <div class="kmeta"><span>${c.data_prevista ? "Término " + dataCurta(c.data_prevista) : "Sem data"}${c.data_inicio ? " · início " + dataCurta(c.data_inicio) : ""}</span>${fin ? `<span class="n">${brl(c.valor)}</span>` : ""}</div>
+      ${extra ? `<div class="kmeta"><span>${extra}</span></div>` : ""}
+      <div class="kmeta"><span>${fin ? `<span class="tag ${c.tipo === "receber" ? "t-receber" : c.tipo === "pagar" ? "t-pagar" : ""}">${esc(TIPOS[c.tipo] || "—")}</span>` : ""}${arq ? ` <span class="tag">${esc(STATUS[c.status])}</span>` : ""}</span><span>${atras ? `<span class="tag t-perigo">atrasado</span>` : ""}${c.conferido ? "" : ` <span class="tag t-alerta">conferir</span>`}</span></div>
+      ${arq && edita ? `<div class="kmeta"><button type="button" class="small" data-acao="desarquivar" data-id="${esc(c.id)}">Desarquivar</button></div>` : ""}
+    </article>`;
+  };
   const cols = STATUS_ORDEM.map(st => {
-    let cs = lista.filter(c => c.status === st);
+    let cs = lista.filter(c => !c.arquivado && c.status === st);
     const total = cs.length, t = somas(cs);
     if (st === "concluido") cs = cs.sort((a, b) => (b.data_conclusao || "").localeCompare(a.data_conclusao || "")).slice(0, S.limConcluidos);
     else cs = cs.sort(porData(f.campo));
-    const cards = cs.map(c => {
-      const atras = ehAtrasado(c, hoje);
-      const extra = [faixaHora(c), ...destaques(c), respTxt(c)].filter(Boolean).map(esc).join(" · ");
-      return `<article class="kcard${atras ? " atras" : ""}"${edita && mouse ? ' draggable="true"' : ""} data-id="${esc(c.id)}" data-edita="${edita ? 1 : 0}">
-        <button type="button" class="kabrir" data-acao="abrir" data-id="${esc(c.id)}">${esc(c.titulo)}</button>
-        <div class="kmeta"><span>${c.data_prevista ? "Término " + dataCurta(c.data_prevista) : "Sem data"}${c.data_inicio ? " · início " + dataCurta(c.data_inicio) : ""}</span>${fin ? `<span class="n">${brl(c.valor)}</span>` : ""}</div>
-        ${extra ? `<div class="kmeta"><span>${extra}</span></div>` : ""}
-        <div class="kmeta"><span>${fin ? `<span class="tag ${c.tipo === "receber" ? "t-receber" : c.tipo === "pagar" ? "t-pagar" : ""}">${esc(TIPOS[c.tipo] || "—")}</span>` : ""}</span><span>${atras ? `<span class="tag t-perigo">atrasado</span>` : ""}${c.conferido ? "" : ` <span class="tag t-alerta">conferir</span>`}</span></div>
-      </article>`;
-    }).join("");
+    const cards = cs.map(c => cardKanban(c, false)).join("");
     const mais = st === "concluido" && total > cs.length ? `<button type="button" class="small" data-acao="mais-concluidos">Mostrar mais (${total - cs.length})</button>` : "";
     return `<section class="kcol" data-status="${st}" aria-label="${STATUS[st]}"><h2><span>${STATUS[st]} (${total})</span><span class="muted n">${fin && (t.pagar || t.receber) ? brl(t.pagar + t.receber) : ""}</span></h2>${cards || `<div class="vazio" style="padding:1rem .5rem">Vazio</div>`}${mais}</section>`;
   }).join("");
+  let colArq = "";
+  if (mostrarArq) {
+    const todosArq = lista.filter(c => c.arquivado).sort((a, b) => (b.data_prevista || "").localeCompare(a.data_prevista || ""));
+    const vis = todosArq.slice(0, S.limConcluidos);
+    colArq = `<section class="kcol kcol-arq" data-status="arquivado" aria-label="Arquivados"><h2><span>Arquivados (${todosArq.length})</span><span class="muted n"></span></h2>${vis.map(c => cardKanban(c, true)).join("") || `<div class="vazio" style="padding:1rem .5rem">Nenhum cartão arquivado</div>`}${todosArq.length > vis.length ? `<button type="button" class="small" data-acao="mais-concluidos">Mostrar mais (${todosArq.length - vis.length})</button>` : ""}</section>`;
+  }
   return cabecalho("Kanban", `${esc(quadroAtual() ? quadroAtual().nome : "")}. ${edita ? "No computador, arraste os cartões. No celular, segure o cartão por um instante e arraste até a coluna." : "Você só pode ler esta área."} ${subAtualizado()}`, botoesTopo()) +
-    filtrosRecolhiveis("kanban", barraFiltros("kanban", true)) + `<div class="kanban">${cols}</div>`;
+    filtrosRecolhiveis("kanban", barraFiltros("kanban", true)) + `<div class="kanban${mostrarArq ? " com-arq" : ""}">${cols}${colArq}</div>`;
 };
 
+
+async function desarquivarCartao(id) {
+  const c = cartaoLocal(id); if (!c) return;
+  if (!podeEditar(c.quadro_id)) { aviso("Você só pode ler esta área.", "erro"); return; }
+  try {
+    const r = await Api.alterar("cartoes", { id: "eq." + id, versao: "eq." + c.versao }, { arquivado: false });
+    if (!r.length) { aviso("Outro usuário alterou este cartão. Atualizei a tela, tente de novo.", "erro"); await carregarQuadro(); }
+    else { mesclar(r[0]); aviso("Cartão desarquivado. Voltou para \"" + STATUS[r[0].status] + "\"."); }
+    render();
+  } catch (e) { erro(e); }
+}
 /* ---- Conferência dos importados ---- */
 const FC = { alerta: "", status: "", arq: "", busca: "", sel: new Set() };
 views.conferir = () => {
@@ -1361,12 +1384,16 @@ async function concluirCartao(id) {
   } catch (e) { erro(e); }
 }
 async function moverCartao(id, status) {
-  const c = cartaoLocal(id); if (!c || c.status === status) return;
+  const c = cartaoLocal(id); if (!c) return;
+  const paraArq = status === "arquivado";
+  if (paraArq ? c.arquivado : (c.status === status && !c.arquivado)) return;
   if (!podeEditar(c.quadro_id)) { aviso("Você só pode ler esta área.", "erro"); return; }
+  if (paraArq && !(await confirmar(`Arquivar "${c.titulo}"? Ele sai das colunas e fica só em Arquivados.`, "Arquivar", false))) return;
   try {
-    const r = await Api.alterar("cartoes", { id: "eq." + id, versao: "eq." + c.versao }, { status });
+    const corpo = paraArq ? { arquivado: true } : (c.arquivado ? { arquivado: false, status } : { status });
+    const r = await Api.alterar("cartoes", { id: "eq." + id, versao: "eq." + c.versao }, corpo);
     if (!r.length) { aviso("Outro usuário alterou este cartão. Atualizei a tela, tente de novo.", "erro"); await carregarQuadro(); }
-    else { mesclar(r[0]); aviso(`Movido para "${STATUS[status]}".`); }
+    else { mesclar(r[0]); aviso(paraArq ? "Cartão arquivado." : c.arquivado ? `Desarquivado e movido para "${STATUS[status]}".` : `Movido para "${STATUS[status]}".`); }
     render();
   } catch (e) { erro(e); }
 }
@@ -1512,6 +1539,7 @@ document.addEventListener("click", async ev => {
   else if (a === "baixar-backup") baixarBackup();
   else if (a === "senha") trocarSenha();
   else if (a === "instalar") instalar();
+  else if (a === "desarquivar") desarquivarCartao(id);
   else if (a === "usr-novo") novoUsuario();
   else if (a === "usr-senha") novaSenhaUsuario(id);
   else if (a === "usr-acessos") abrirAcessos(id);
@@ -1619,7 +1647,7 @@ function iniciarArraste(card, x, y) {
   card.classList.add("arrastando");
   const barra = document.createElement("div");
   barra.className = "dropbar"; barra.id = "dropbar"; barra.setAttribute("aria-hidden", "true");
-  barra.innerHTML = STATUS_BARRA.map(s => `<div class="dropbtn" data-status="${s}">${STATUS[s]}</div>`).join("");
+  barra.innerHTML = [...STATUS_BARRA, ...(document.querySelector(".kcol-arq") ? ["arquivado"] : [])].map(s => `<div class="dropbtn" data-status="${s}">${s === "arquivado" ? "Arquivados" : STATUS[s]}</div>`).join("");
   document.body.appendChild(barra);
   document.body.classList.add("arrastando-cartao");
   if (navigator.vibrate) { try { navigator.vibrate(25); } catch (e) { /* sem vibração */ } }
