@@ -615,6 +615,7 @@ views.conferir = () => {
       <button type="button" class="small" data-acao="lote-concluir">Marcar como concluído</button>
       <button type="button" class="small" data-acao="lote-arquivar">Arquivar</button>
       <button type="button" class="small" data-acao="lote-desarquivar">Desarquivar</button>
+      ${admin() ? `<button type="button" class="small" data-acao="lote-mover">Mover para outra área</button>` : ""}
       ${admin() ? `<button type="button" class="small danger" data-acao="lote-lixeira">Enviar para a lixeira</button>` : ""}</div>` : "") +
     `<div class="panel tabela">${lista.length ? `<table><thead><tr><th><input type="checkbox" data-sel-todos ${todosSel ? "checked" : ""} aria-label="Selecionar todos"></th><th></th><th>Cartão</th><th class="n">Valor</th><th>Término</th><th>Situação</th><th>Alertas</th></tr></thead><tbody>${linhas}</tbody></table>`
       : `<div class="vazio">${todos.length ? "Nenhum cartão neste filtro." : "Tudo conferido. Nada pendente."}</div>`}</div>`;
@@ -934,6 +935,30 @@ function novaSenhaUsuario(id) {
   };
 }
 
+
+async function moverLote(ids) {
+  const alvos = S.todosQuadros.filter(q => q.ativo !== false && q.id !== S.quadroId);
+  if (!alvos.length) { aviso("Não há outra área para receber os cartões.", "erro"); return; }
+  const destino = await new Promise(res => {
+    let feito = false; const fim = v => { if (feito) return; feito = true; fechar2(); res(v); };
+    abrir2(`<h2>Mover ${esc(pl(ids.length, "cartão", "cartões"))} para outra área</h2>
+      <div class="field"><label for="ml-area">Área de destino</label><select id="ml-area">${alvos.map(q => `<option value="${esc(q.id)}">${esc(q.nome)}</option>`).join("")}</select></div>
+      <p class="muted">As etiquetas saem e a categoria só fica se existir uma com o mesmo nome na área nova. Responsáveis, datas e histórico continuam. Quem não tem acesso à área nova não verá os cartões.</p>
+      <div class="rodape-dialogo"><button type="button" id="ml-nao">Cancelar</button><button type="button" class="primary" id="ml-sim">Mover</button></div>`);
+    $("#ml-nao").onclick = () => fim(null); $("#ml-sim").onclick = () => fim($("#ml-area").value); dlg2.oncancel = () => fim(null);
+  });
+  if (!destino) return;
+  const semAcesso = new Set();
+  ids.forEach(id => (S.resp.get(id) || []).forEach(u => { if (!temAcessoArea(u, destino)) semAcesso.add(u); }));
+  if (semAcesso.size && !(await confirmar(`${[...semAcesso].map(nomeDe).join(", ")} ${semAcesso.size === 1 ? "é responsável por cartões que vão para" : "são responsáveis por cartões que vão para"} uma área a que não ${semAcesso.size === 1 ? "tem" : "têm"} acesso, e não ${semAcesso.size === 1 ? "verá" : "verão"} esses cartões. Mover mesmo assim?`, "Mover", false))) return;
+  try {
+    let n = 0;
+    for (let i = 0; i < ids.length; i += 40) n += Number(await Api.rpc("mover_cartoes", { p_ids: ids.slice(i, i + 40), p_quadro: destino })) || 0;
+    FC.sel = new Set(); await carregarQuadro(); aviso(`${pl(n, "cartão movido", "cartões movidos")} para ${(areaDe(destino) || {}).nome || "a nova área"}.`); render();
+  } catch (e) {
+    erro(/Could not find the function/.test(e.message) ? new Error("Falta rodar o SQL da atualização 2 no Supabase para trocar a área.") : e);
+  }
+}
 /* ---- Importar JSON do Trello (administrador) ---- */
 const IMP = { dados: null, relatorio: "" };
 views.importar = () => {
@@ -1082,8 +1107,33 @@ function cartaoVazio(qid, status, data) {
   const fin = !!(areaDe(qid) || {}).usa_financeiro;
   return { id: null, quadro_id: qid, titulo: "", descricao: "", tipo: fin ? "pagar" : null, empresa: "", categoria_id: null, valor: null, status: status || "a_fazer", data_inicio: null, data_prevista: data || null, hora_prevista: null, hora_fim: null, campos: {}, conferido: true, arquivado: false, versao: 0, alertas: [], dados_origem: null };
 }
+async function carregarMembrosAreas() {
+  try { S.membrosAreas = (await Api.rpc("membros_das_areas")) || []; } catch (e) { S.membrosAreas = null; }
+}
+function blocoResponsaveis(c) {
+  const ativos = S.usuarios.filter(u => u.ativo || CA.resp.includes(u.id));
+  const chk = u => `<label class="inline"><input type="checkbox" data-resp="${esc(u.id)}" ${CA.resp.includes(u.id) ? "checked" : ""}> ${esc(u.nome)}</label>`;
+  const cab = t => `<div style="margin:.55rem 0 .2rem;font-weight:600">${esc(t)}</div>`;
+  if (!S.membrosAreas) return `<div class="checks">${ativos.map(chk).join("") || "<span class='muted'>Nenhum usuário.</span>"}</div>`;
+  const naArea = (u, qid) => S.membrosAreas.some(m => m.quadro_id === qid && m.usuario_id === u.id);
+  const areas = [areaDe(c.quadro_id), ...S.todosQuadros.filter(q => q.id !== c.quadro_id && q.ativo !== false)].filter(Boolean);
+  let html = "", listados = new Set();
+  areas.forEach(q => {
+    const us = ativos.filter(u => u.papel !== "admin" && naArea(u, q.id));
+    if (!us.length && q.id !== c.quadro_id) return;
+    us.forEach(u => listados.add(u.id));
+    html += cab(q.nome + (q.id === c.quadro_id ? " (área deste cartão)" : "")) + `<div class="checks">${us.map(chk).join("") || "<span class='muted'>Ninguém tem acesso a esta área ainda.</span>"}</div>`;
+  });
+  const adm = ativos.filter(u => u.papel === "admin");
+  if (adm.length) { adm.forEach(u => listados.add(u.id)); html += cab("Administradores (acessam todas as áreas)") + `<div class="checks">${adm.map(chk).join("")}</div>`; }
+  const resto = ativos.filter(u => !listados.has(u.id));
+  if (resto.length) html += cab(admin() ? "Sem acesso a nenhuma área" : "Outras pessoas") + `<div class="checks">${resto.map(chk).join("")}</div>`;
+  return html || "<span class='muted'>Nenhum usuário.</span>";
+}
+const temAcessoArea = (uid, qid) => { const u = S.usuarios.find(x => x.id === uid); return !!u && (u.papel === "admin" || !S.membrosAreas || S.membrosAreas.some(m => m.quadro_id === qid && m.usuario_id === uid)); };
 async function abrirCartao(id, novoStatus, pre) {
   try {
+    await carregarMembrosAreas();
     if (id) {
       const [linha, hist, coment, ativ, resp, etq] = await Promise.all([
         Api.ler("cartoes", { select: "*", id: "eq." + id }),
@@ -1118,7 +1168,7 @@ function lerBruto() {
   c.titulo = g("f-titulo"); c.descricao = g("f-desc"); c.status = g("f-status") || c.status;
   c.hora_prevista = g("f-hini") || null; c.hora_fim = g("f-hfim") || null;
   if (CA.novo) { c.data_inicio = g("f-ini") || null; c.data_prevista = g("f-prev") || null; }
-  CA.resp = $$("[data-resp]", dlg).filter(x => x.checked).map(x => x.dataset.resp);
+  CA.resp = [...new Set($$("[data-resp]", dlg).filter(x => x.checked).map(x => x.dataset.resp))];
 }
 function trocarAreaDoCartao(qid) {
   lerBruto();
@@ -1137,7 +1187,7 @@ function desenharCartao() {
   const campoCat = cats.length || fin ? `<div class="field"><label for="f-cat">Categoria</label><select id="f-cat">${opt("", "Sem categoria", c.categoria_id || "")}${cats.map(x => opt(x.id, x.nome, c.categoria_id)).join("")}</select></div>` : "";
   abrir(`<form id="f-cartao" novalidate>
     <h2>${CA.novo ? "Novo cartão" : esc(c.titulo)}</h2>
-    ${CA.novo ? `<div class="field"><label for="f-area">Área</label><select id="f-area">${editaveis.map(q => opt(q.id, q.nome, c.quadro_id)).join("")}</select></div>` : `<p class="muted" style="margin-top:-.3rem">Área: ${esc(area.nome || "")}${pode ? "" : " (somente leitura)"}</p>`}
+    ${CA.novo ? `<div class="field"><label for="f-area">Área</label><select id="f-area">${editaveis.map(q => opt(q.id, q.nome, c.quadro_id)).join("")}</select></div>` : (admin() && pode ? `<div class="field"><label for="f-area-mover">Área do cartão</label><select id="f-area-mover">${S.todosQuadros.filter(q => q.ativo !== false || q.id === c.quadro_id).map(q => opt(q.id, q.nome, c.quadro_id)).join("")}</select><div class="muted" style="font-size:.85rem">Ao trocar a área, as etiquetas saem e a categoria só fica se existir uma com o mesmo nome na área nova. Responsáveis, datas e histórico continuam.</div></div>` : `<p class="muted" style="margin-top:-.3rem">Área: ${esc(area.nome || "")}${pode ? "" : " (somente leitura)"}</p>`)}
     ${(c.alertas || []).length && !c.conferido ? `<div class="banner" style="margin-bottom:.7rem"><span><b>Para conferir:</b> ${(c.alertas || []).map(a => esc(alertaTxt(a))).join("; ")}.</span></div>` : ""}
     <div class="field"><label for="f-titulo">Título *</label><input id="f-titulo" type="text" value="${esc(c.titulo)}" required><div class="erro-campo" id="e-titulo"></div></div>
     ${fin ? `<div class="grade3">
@@ -1153,7 +1203,7 @@ function desenharCartao() {
     ${CA.novo ? `<div class="grade2"><div class="field"><label for="f-ini">Início</label><input id="f-ini" type="date" value="${esc(c.data_inicio || "")}"></div><div class="field"><label for="f-prev">Término previsto</label><input id="f-prev" type="date" value="${esc(c.data_prevista || "")}"></div></div>` : ""}
     <div class="grade2"><div class="field"><label for="f-hini">Hora de início (opcional)</label><input id="f-hini" type="time" value="${esc(horaTxt(c.hora_prevista))}"></div>
       <div class="field"><label for="f-hfim">Hora de término (opcional)</label><input id="f-hfim" type="time" value="${esc(horaTxt(c.hora_fim))}"></div></div><div class="erro-campo" id="e-hora"></div>
-    <div class="field"><label>Responsáveis (funcionários)</label><div class="checks">${S.usuarios.filter(u => u.ativo || CA.resp.includes(u.id)).map(u => `<label class="inline"><input type="checkbox" data-resp="${esc(u.id)}" ${CA.resp.includes(u.id) ? "checked" : ""}> ${esc(u.nome)}</label>`).join("") || "<span class='muted'>Nenhum usuário.</span>"}</div></div>
+    <div class="field"><label>Responsáveis (funcionários)</label><div class="muted" style="font-size:.85rem">Quem está fora da área do cartão não consegue ver este cartão.</div>${blocoResponsaveis(c)}</div>
     ${etqs.length ? `<div class="field"><label>Etiquetas</label><div class="checks">${etqs.map(e => `<label class="inline"><input type="checkbox" data-etq="${esc(e.id)}" ${CA.etq.includes(e.id) ? "checked" : ""}> <span class="bolinha" style="background:${esc(e.cor)}"></span> ${esc(e.nome || e.cor)}</label>`).join("")}</div></div>` : ""}
     ${fin || !c.conferido ? `<div class="field"><label class="inline"><input type="checkbox" id="f-conf" ${c.conferido ? "checked" : ""}> Cartão conferido</label></div>` : ""}
     <div class="bloco" id="bl-datas">${blocoDatas()}</div>
@@ -1169,6 +1219,7 @@ function desenharCartao() {
       <button type="button" data-acao="fechar">Fechar</button>
       ${pode ? `<button type="submit" class="primary">${CA.novo ? "Criar cartão" : "Salvar cartão"}</button>` : ""}
     </div></form>`, true);
+  $$("[data-resp]", dlg).forEach(cb => cb.addEventListener("change", () => $$("[data-resp]", dlg).forEach(o => { if (o.dataset.resp === cb.dataset.resp) o.checked = cb.checked; })));
   if (pode) $("#f-titulo").focus();
   else $$("#f-cartao input, #f-cartao select, #f-cartao textarea").forEach(el => { el.disabled = true; });
 }
@@ -1198,7 +1249,7 @@ function lerFormulario() {
     categoria_id: ($("#f-cat") ? $("#f-cat").value : c.categoria_id) || null,
     conferido: $("#f-conf") ? $("#f-conf").checked : c.conferido,
     hora_prevista: hi, hora_fim: hf, campos,
-    resp: $$("[data-resp]", dlg).filter(x => x.checked).map(x => x.dataset.resp),
+    resp: [...new Set($$("[data-resp]", dlg).filter(x => x.checked).map(x => x.dataset.resp))],
     etq: $$("[data-etq]", dlg).filter(x => x.checked).map(x => x.dataset.etq)
   };
   if (fin) { out.tipo = $("#f-tipo").value || null; out.valor = valor; out.empresa = $("#f-empresa").value.trim() || null; }
@@ -1211,6 +1262,13 @@ async function sincronizarLigacoes(cartaoId, tabela, campo, antes, depois) {
 }
 async function salvarCartao() {
   const f = lerFormulario(); if (!f) return;
+  const sel = $("#f-area-mover"), destino = sel && !CA.novo ? sel.value : null, mudaArea = !!destino && destino !== CA.c.quadro_id;
+  if (mudaArea) {
+    const sem = f.resp.filter(id => !temAcessoArea(id, destino)).map(nomeDe);
+    const nomeDest = (areaDe(destino) || {}).nome || "a nova área";
+    const msg = sem.length ? `${sem.join(", ")} ${sem.length === 1 ? "não tem" : "não têm"} acesso à área "${nomeDest}" e não ${sem.length === 1 ? "verá" : "verão"} este cartão. Libere em Usuários > Acessos. Mover mesmo assim?` : `Mover este cartão para a área "${nomeDest}"?`;
+    if (!(await confirmar(msg, "Mover cartão", false))) return;
+  }
   const btn = $('#f-cartao button[type="submit"]'); if (btn) btn.disabled = true;
   try {
     const c = CA.c;
@@ -1241,7 +1299,11 @@ async function salvarCartao() {
       }
       await sincronizarLigacoes(c.id, "cartao_responsaveis", "usuario_id", CA.resp, resp);
       await sincronizarLigacoes(c.id, "cartao_etiquetas", "etiqueta_id", CA.etq, etq);
-      aviso("Cartão salvo.");
+      if (mudaArea) {
+        try { await Api.rpc("mover_cartoes", { p_ids: [c.id], p_quadro: destino }); }
+        catch (e) { if (/Could not find the function|mover_cartoes/.test(e.message) && !/administrador/.test(e.message)) throw new Error("Falta rodar o SQL da atualização 2 no Supabase para trocar a área."); throw e; }
+        aviso("Cartão salvo e movido para " + ((areaDe(destino) || {}).nome || "a nova área") + ".");
+      } else aviso("Cartão salvo.");
     }
     fechar();
     await carregarQuadro(); render();
@@ -1314,6 +1376,7 @@ async function acaoLote(acao) {
   try {
     if (acao === "lote-conferido") { await emLote(ids, { conferido: true }, `${pl(ids.length, "cartão marcado", "cartões marcados")} como conferido${ids.length === 1 ? "" : "s"}.`); }
     else if (acao === "lote-arquivar") { if (!(await confirmar(`Arquivar ${pl(ids.length, "cartão", "cartões")}? Eles saem do painel e do Kanban, mas continuam no sistema.`, "Arquivar", false))) return; await emLote(ids, { arquivado: true }, "Cartões arquivados."); }
+    else if (acao === "lote-mover") { await moverLote(ids); }
     else if (acao === "lote-desarquivar") { await emLote(ids, { arquivado: false }, "Cartões desarquivados."); }
     else if (acao === "lote-concluir") {
       const d = await pedirTexto(`Marcar ${pl(ids.length, "cartão", "cartões")} como concluído${ids.length === 1 ? "" : "s"}`, "Data de conclusão (deixe vazio para usar hoje)", "Concluir cartões", "date");
