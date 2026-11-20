@@ -505,7 +505,7 @@ function barraFiltros(ch, semStatus) {
       ${sel("categoria", "Categoria", opt("", "Todas", f.categoria) + opt("__sem", "Sem categoria", f.categoria) + categoriasArea().map(c => opt(c.id, c.nome, f.categoria)).join(""))}
       ${sel("resp", "Responsável", opt("", "Todos", f.resp) + opt("__eu", "Só os meus", f.resp) + S.usuarios.filter(u => u.ativo).map(u => opt(u.id, u.nome, f.resp)).join(""))}
       <div class="field"><label for="fl-${ch}-busca">Buscar</label><input id="fl-${ch}-busca" type="search" data-filtro="busca" data-grupo="${ch}" value="${esc(f.busca)}" placeholder="Título ou empresa"></div>
-      <label class="inline"><input type="checkbox" data-filtro="arquivados" data-grupo="${ch}" ${f.arquivados ? "checked" : ""}> Incluir arquivados</label>
+      <label class="inline"><input type="checkbox" data-filtro="arquivados" data-grupo="${ch}" ${f.arquivados ? "checked" : ""}> Incluir arquivados</label><button type="button" class="small" data-acao="limpar-filtros" data-grupo="${ch}" title="Mostrar todos os cartões, sem nenhum filtro">Limpar filtros</button>
     </div>
     ${f.periodo === "atrasados" ? `<p class="muted" style="margin:.5rem 0 0">Atrasados considera sempre o término previsto, com o cartão ainda em aberto.</p>` : ""}
   </div>`;
@@ -1440,6 +1440,13 @@ async function salvarCartao() {
     }
     fechar();
     await carregarQuadro(); render();
+    {
+      const rota = (location.hash.replace(/^#\//, "") || "painel").split("?")[0], fl = F[rota], cc = S.cartoes.find(x => x.id === c.id);
+      if (fl && cc && !passa(cc, fl, hojeBR())) {
+        const cat = fl.categoria === "__sem" ? "Sem categoria" : (S.categorias.find(x => x.id === fl.categoria) || {}).nome;
+        aviso("O cartão foi salvo, mas saiu da lista porque algum filtro está ativo" + (fl.categoria ? ` (Categoria: ${cat || "filtrada"})` : "") + ". Mude os filtros para vê-lo.");
+      }
+    }
   } catch (e) { erro(e); if (btn) btn.disabled = false; }
 }
 async function mudarData(campo) {
@@ -1624,6 +1631,7 @@ document.addEventListener("click", async ev => {
   else if (a === "novo") abrirCartao(null);
   else if (a === "concluir") concluirCartao(id);
   else if (a === "atualizar") { try { await carregarQuadro(); render(); aviso("Atualizado."); } catch (e) { erro(e); } }
+  else if (a === "limpar-filtros") { const g = el.dataset.grupo; F[g] = { ...F[g], periodo: "todos", de: "", ate: "", status: "todos", tipo: "", categoria: "", resp: "", busca: "", arquivados: false }; salvarFiltros(); render(); aviso("Filtros limpos."); }
   else if (a === "periodo") { F[el.dataset.grupo].periodo = el.dataset.valor; salvarFiltros(); render(); }
   else if (a === "mais-concluidos") { S.limConcluidos += 20; render(); }
   else if (a === "fechar") fechar();
