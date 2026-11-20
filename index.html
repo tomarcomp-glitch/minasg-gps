@@ -265,7 +265,7 @@ const pref = {
 const dlg = $("#dlg"), dlg2 = $("#dlg2");
 function abrir(html, larga) { dlg.className = larga ? "larga" : ""; dlg.innerHTML = html; if (!dlg.open) dlg.showModal(); }
 function fechar() { if (dlg.open) dlg.close(); }
-function abrir2(html) { dlg2.innerHTML = html; if (!dlg2.open) dlg2.showModal(); }
+function abrir2(html) { dlg2.style.width = ""; dlg2.innerHTML = html; if (!dlg2.open) dlg2.showModal(); }
 function fechar2() { if (dlg2.open) dlg2.close(); }
 function confirmar(msg, rotulo = "Confirmar", perigo = true) {
   return new Promise(res => {
@@ -1008,12 +1008,12 @@ function corInicialCategoria(nome) {
   const igual = n && recentes().find(c => c.nome.trim().toLowerCase() === n && cor(c));
   if (igual) { const pi = corPaleta(cor(igual)); return pi ? pi[1] : cor(igual); }
   const ultima = recentes().find(cor);
-  const pc = corPaleta(ultima ? cor(ultima) : "#2f6fd6"); return pc ? pc[1] : "#2f6fd6";
+  const pc = ultima && corPaleta(cor(ultima)); return pc ? pc[1] : "";
 }
-const seletorCor = (id, atual, extra) => { const pa = corPaleta(atual) || PALETA[0]; return `<select ${extra} id="${id}" aria-label="Cor" style="width:9.5rem;flex:none">${PALETA.map(p => `<option value="${p[1]}"${p[1] === pa[1] ? " selected" : ""}>${p[0]}</option>`).join("")}</select>`; };
+const seletorCor = (id, atual, extra) => { const pa = corPaleta(atual); return `<select ${extra} id="${id}" aria-label="Cor" style="width:6.6rem;flex:none;padding-left:.4rem;padding-right:.2rem"><option value=""${pa ? "" : " selected"}>Sem cor</option>${PALETA.map(p => `<option value="${p[1]}"${pa && p[1] === pa[1] ? " selected" : ""}>${p[0]}</option>`).join("")}</select>`; };
 const msgSemCor = e => /\bcor\b|criado_em|schema cache/i.test(e.message) ? "Falta rodar o SQL da atualização 4 no Supabase para guardar a cor das categorias." : null;
 async function corCategoria(id, cor) {
-  try { await Api.alterar("categorias", { id: "eq." + id }, { cor }); await recarregarCategorias(); render(); }
+  try { await Api.alterar("categorias", { id: "eq." + id }, { cor: cor || null }); await recarregarCategorias(); desenharCategorias(); render(); }
   catch (e) { desenharCategorias(msgSemCor(e) || msgCategoria(e)); }
 }
 const usoCategoria = id => S.cartoes.filter(c => c.categoria_id === id).length;
@@ -1035,13 +1035,14 @@ function desenharCategorias(msg) {
   const q = areaDe(CG.qid) || {}, lista = categoriasArea(CG.qid);
   abrir2(`<h2>Categorias de ${esc(q.nome || "")}</h2>
     <p class="muted">Use para centros de custo, por exemplo Fornecedores, Impostos, Salários, Prestação de Serviços. O nome muda ao sair do campo. Cartões que usam a categoria acompanham o novo nome.</p>
-    <div style="max-height:45vh;overflow:auto">${lista.map(x => `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.4rem;align-items:center;margin-bottom:.4rem">
-      <div style="display:flex;gap:.4rem;align-items:center"><span class="bolinha" style="background:${esc((corPaleta(x.cor) || [0, "#6b7280"])[1])}"></span>${seletorCor("", x.cor, `data-cg="cor" data-id="${esc(x.id)}"`)}<input type="text" value="${esc(x.nome)}" data-cg="nome" data-id="${esc(x.id)}" aria-label="Nome da categoria" maxlength="80" style="flex:1;min-width:0"></div>
-      <span class="muted" style="white-space:nowrap">${usoCategoria(x.id)} cartões</span>
+    <div>${lista.map(x => `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.6rem;align-items:center;margin-bottom:.4rem">
+      <div style="display:flex;gap:.4rem;align-items:center"><span class="bolinha" style="background:${esc((corPaleta(x.cor) || [0, "#6b7280"])[1])}" data-bol="${esc(x.id)}"></span>${seletorCor("", x.cor, `data-cg="cor" data-id="${esc(x.id)}"`)}<input type="text" value="${esc(x.nome)}" data-cg="nome" data-id="${esc(x.id)}" aria-label="Nome da categoria" maxlength="80" style="flex:1;min-width:0"></div>
+      <span class="muted" style="white-space:nowrap">${pl(usoCategoria(x.id), "cartão", "cartões")}</span>
       <button type="button" class="small danger" data-cg="excluir" data-id="${esc(x.id)}">Excluir</button></div>`).join("") || `<p class="muted">Nenhuma categoria ainda.</p>`}</div>
     <div class="field" style="margin-top:.7rem"><label for="cg-nova">Nova categoria</label><div style="display:flex;gap:.4rem;align-items:center">${seletorCor("cg-cor", corInicialCategoria(""), "")}<input id="cg-nova" type="text" maxlength="80" placeholder="Ex.: Fornecedores" style="flex:1;min-width:0"><button type="button" class="primary" id="cg-add">Adicionar</button></div><div class="muted" style="font-size:.85rem">A cor aparece no cartão e combina com a etiqueta de mesma cor. Já vem marcada a cor da última categoria cadastrada; se já existe uma categoria com o mesmo nome em outra área, a cor dela é sugerida.</div></div>
     <div class="erro-campo" id="cg-erro" role="alert">${esc(msg || "")}</div>
     <div class="rodape-dialogo"><button type="button" id="cg-fechar">Fechar</button></div>`);
+  dlg2.style.width = "min(900px,96vw)";
   $("#cg-fechar").onclick = fecharCategorias; dlg2.oncancel = () => { const u = CG && CG.ultima; CG = null; refrescarSelectCategoria(u); render(); };
   $("#cg-add").onclick = adicionarCategoria;
   $("#cg-nova").addEventListener("input", () => { $("#cg-cor").value = corInicialCategoria($("#cg-nova").value); });
@@ -1054,7 +1055,7 @@ const msgCategoria = e => /duplicate key|unique/i.test(e.message) || /Já existe
 async function adicionarCategoria() {
   const nome = $("#cg-nova").value.trim();
   if (!nome) { $("#cg-erro").textContent = "Escreva o nome da categoria."; return; }
-  try { const [nova] = await Api.inserir("categorias", { quadro_id: CG.qid, nome, cor: $("#cg-cor").value }); if (nova) CG.ultima = nova.id; await recarregarCategorias(); desenharCategorias(); const i = $("#cg-nova"); if (i) i.focus(); }
+  try { const [nova] = await Api.inserir("categorias", { quadro_id: CG.qid, nome, cor: $("#cg-cor").value || null }); if (nova) CG.ultima = nova.id; await recarregarCategorias(); desenharCategorias(); const i = $("#cg-nova"); if (i) i.focus(); }
   catch (e) { $("#cg-erro").textContent = msgSemCor(e) || msgCategoria(e); }
 }
 async function renomearCategoria(id, valor) {
