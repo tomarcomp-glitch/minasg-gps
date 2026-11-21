@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MINASG GPS - Gestão de Processos e Serviços</title>
+<title>GPS MINASG - Gestão de Processos e Serviços</title>
 <meta name="theme-color" content="#1f5f8b">
 <meta name="description" content="Gestão de processos e serviços da produção e do escritório.">
 <link rel="manifest" href="manifest.webmanifest">
@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="MINASG GPS">
+<meta name="apple-mobile-web-app-title" content="GPS MINASG">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <style>
 :root{
@@ -910,7 +910,7 @@ async function chamarFuncaoUsuarios(corpo) {
   }
 }
 function mensagemAcesso(usuario, senha) {
-  return `MINASG GPS - Gestão de Processos e Serviços\nLink: ${linkDoApp()}\nUsuário: ${usuario}\nSenha: ${senha}\nNo primeiro acesso o sistema pede para você criar uma senha nova.`;
+  return `GPS MINASG - Gestão de Processos e Serviços\nLink: ${linkDoApp()}\nUsuário: ${usuario}\nSenha: ${senha}\nNo primeiro acesso o sistema pede para você criar uma senha nova.`;
 }
 async function copiarTexto(txt) {
   try { await navigator.clipboard.writeText(txt); return true; }
@@ -1567,7 +1567,7 @@ function trocarSenha() {
 /* ===================== ESTRUTURA DA PÁGINA ===================== */
 function telaLogin(msg) {
   S.eu = null; fechar(); fechar2();
-  $("#raiz").innerHTML = `<main class="login"><div class="brand" style="padding-left:0">${LOGO}<div><b>MINASG GPS</b><small>Gestão de Processos e Serviços</small></div></div><p class="muted">Entre com o usuário e a senha que o administrador enviou.</p>
+  $("#raiz").innerHTML = `<main class="login"><div class="brand" style="padding-left:0">${LOGO}<div><b>GPS MINASG</b><small>Gestão de Processos e Serviços</small></div></div><p class="muted">Entre com o usuário e a senha que o administrador enviou.</p>
     <form id="f-login" class="panel" novalidate>
       <div class="field"><label for="l-usuario">Usuário</label><input id="l-usuario" type="text" autocomplete="username" autocapitalize="none" spellcheck="false"></div>
       <div class="field"><label for="l-senha">Senha</label><input id="l-senha" type="password" autocomplete="current-password"></div>
@@ -1583,12 +1583,12 @@ function telaLogin(msg) {
     catch (e) { $("#l-erro").textContent = e.message; b.disabled = false; }
   };
 }
-const LOGO = `<svg viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#1f5f8b"/><path fill="#fff" fill-rule="evenodd" d="M228.0 110.7 L233.3 67.4 L278.7 67.4 L284.0 110.7 L318.8 122.0 L348.5 90.0 L385.3 116.8 L364.0 154.8 L385.6 184.5 L428.4 176.1 L442.4 219.3 L402.9 237.7 L402.9 274.3 L442.4 292.7 L428.4 335.9 L385.6 327.5 L364.0 357.2 L385.3 395.2 L348.5 422.0 L318.8 390.0 L284.0 401.3 L278.7 444.6 L233.3 444.6 L228.0 401.3 L193.2 390.0 L163.5 422.0 L126.7 395.2 L148.0 357.2 L126.4 327.5 L83.6 335.9 L69.6 292.7 L109.1 274.3 L109.1 237.7 L69.6 219.3 L83.6 176.1 L126.4 184.5 L148.0 154.8 L126.7 116.8 L163.5 90.0 L193.2 122.0 Z M344 256 A88 88 0 1 0 168 256 A88 88 0 1 0 344 256 Z"/><path d="M212 262l32 32 62-72" fill="none" stroke="#f5b335" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const LOGO = `<svg viewBox="0 0 512 512" aria-hidden="true"><defs><radialGradient id="lgb" cx=".5" cy=".38" r=".8"><stop offset="0" stop-color="#14397a"/><stop offset=".55" stop-color="#0a1f47"/><stop offset="1" stop-color="#040d22"/></radialGradient><linearGradient id="lgf" gradientUnits="userSpaceOnUse" x1="70" y1="30" x2="440" y2="450"><stop offset="0" stop-color="#fff"/><stop offset=".3" stop-color="#e6edf7"/><stop offset=".55" stop-color="#b9c8de"/><stop offset=".75" stop-color="#eef3fa"/><stop offset="1" stop-color="#9fb3cf"/></linearGradient></defs><rect width="512" height="512" rx="112" fill="url(#lgb)"/><g transform="translate(256 256) scale(.84) translate(-262 -250)" fill="none" stroke-width="36" stroke-linejoin="miter" stroke-miterlimit="8" stroke-linecap="butt"><path d="M150 132 L255 40 L360 132" transform="translate(14.0 16.5)" stroke="rgb(10,60,140)"/><path d="M150 132 L255 40 L360 132" transform="translate(12.2 14.4)" stroke="rgb(12,68,149)"/><path d="M150 132 L255 40 L360 132" transform="translate(10.5 12.4)" stroke="rgb(14,76,158)"/><path d="M150 132 L255 40 L360 132" transform="translate(8.8 10.3)" stroke="rgb(16,84,168)"/><path d="M150 132 L255 40 L360 132" transform="translate(7.0 8.2)" stroke="rgb(19,93,177)"/><path d="M150 132 L255 40 L360 132" transform="translate(5.2 6.2)" stroke="rgb(21,101,186)"/><path d="M150 132 L255 40 L360 132" transform="translate(3.5 4.1)" stroke="rgb(23,109,196)"/><path d="M150 132 L255 40 L360 132" transform="translate(1.8 2.1)" stroke="rgb(25,117,205)"/><path d="M150 132 L255 40 L360 132" stroke="url(#lgf)"/><path d="M165 290 L165 442 L398 442 L425 414 L425 130 L255 300 L88 130 L88 432" transform="translate(14.0 16.5)" stroke="rgb(10,60,140)"/><path d="M165 290 L165 442 L398 442 L425 414 L425 130 L255 300 L88 130 L88 432" transform="translate(12.2 14.4)" stroke="rgb(12,68,149)"/><path d="M165 290 L165 442 L398 442 L425 414 L425 130 L255 300 L88 130 L88 432" transform="translate(10.5 12.4)" stroke="rgb(14,76,158)"/><path d="M165 290 L165 442 L398 442 L425 414 L425 130 L255 300 L88 130 L88 432" transform="translate(8.8 10.3)" stroke="rgb(16,84,168)"/><path d="M165 290 L165 442 L398 442 L425 414 L425 130 L255 300 L88 130 L88 432" transform="translate(7.0 8.2)" stroke="rgb(19,93,177)"/><path d="M165 290 L165 442 L398 442 L425 414 L425 130 L255 300 L88 130 L88 432" transform="translate(5.2 6.2)" stroke="rgb(21,101,186)"/><path d="M165 290 L165 442 L398 442 L425 414 L425 130 L255 300 L88 130 L88 432" transform="translate(3.5 4.1)" stroke="rgb(23,109,196)"/><path d="M165 290 L165 442 L398 442 L425 414 L425 130 L255 300 L88 130 L88 432" transform="translate(1.8 2.1)" stroke="rgb(25,117,205)"/><path d="M165 290 L165 442 L398 442 L425 414 L425 130 L255 300 L88 130 L88 432" stroke="url(#lgf)"/></g></svg>`;
 function montarShell() {
   const a = admin();
   const instalado = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
   $("#raiz").innerHTML = `<div class="app"><nav class="side" aria-label="Principal">
-    <div class="brand">${LOGO}<div><b>MINASG GPS</b><small>Gestão de Processos e Serviços</small></div></div>
+    <div class="brand">${LOGO}<div><b>GPS MINASG</b><small>Gestão de Processos e Serviços</small></div></div>
     <div class="field" style="margin:0 0 .4rem"><label for="sel-quadro" class="sr">Área</label><select id="sel-quadro" aria-label="Área">${S.quadros.map(q => opt(q.id, q.nome, S.quadroId)).join("")}</select></div>
     <a href="#/painel" data-rota="painel">Demandas do dia</a>
     <a href="#/kanban" data-rota="kanban">Kanban</a>
