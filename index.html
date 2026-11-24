@@ -197,7 +197,7 @@ const CFG = {
   url: "https://focaombqqrecvjbdhpop.supabase.co",
   chave: "sb_publishable_3hgGLjrYk_zGE8wY6yfDwQ_0vAhoH5k", // chave pública: pode ficar no HTML
   dominio: "kanban.interno",
-  atualizarACada: 30000,
+  atualizarACada: 15000, ociosoApos: 60000,
   pref: "kanban-fin:"
 };
 const STATUS = { backlog: "Backlog", a_fazer: "A fazer", em_andamento: "Em andamento", concluido: "Concluído" };
@@ -417,8 +417,9 @@ async function carregarBase() {
     S.quadroId = q ? q.id : null;
   }
 }
-async function carregarQuadro() {
-  if (!S.quadros.length) { S.cartoes = []; S.categorias = []; S.etiquetas = []; S.resp = new Map(); S.etq = new Map(); S.atualizadoEm = new Date(); return; }
+S.gen = 0; // sobe a cada mudança local; a atualização automática descarta leituras antigas
+async function buscarQuadro() {
+  if (!S.quadros.length) return { vazio: true };
   const [cartoes, categorias, etiquetas, resp, etq] = await Promise.all([
     Api.listar("cartoes", { select: COLUNAS_CARTAO, excluido_em: "is.null", order: "id_curto.asc,id.asc" }),
     Api.ler("categorias", { select: "*", order: "nome.asc" }),
@@ -426,13 +427,24 @@ async function carregarQuadro() {
     Api.listar("cartao_responsaveis", { select: "cartao_id,usuario_id", order: "cartao_id.asc,usuario_id.asc" }),
     Api.listar("cartao_etiquetas", { select: "cartao_id,etiqueta_id", order: "cartao_id.asc,etiqueta_id.asc" })
   ]);
+  return { cartoes, categorias, etiquetas, resp, etq };
+}
+function aplicarQuadro(d) {
+  if (d.vazio) { S.cartoes = []; S.categorias = []; S.etiquetas = []; S.resp = new Map(); S.etq = new Map(); S.assin = ""; S.atualizadoEm = new Date(); return; }
   const mapa = (arr, a, b) => { const m = new Map(); arr.forEach(r => { if (!m.has(r[a])) m.set(r[a], []); m.get(r[a]).push(r[b]); }); return m; };
   const ativas = new Set(S.quadros.map(q => q.id));
-  S.cartoes = cartoes.filter(c => ativas.has(c.quadro_id)); S.categorias = categorias; S.etiquetas = etiquetas;
-  S.resp = mapa(resp, "cartao_id", "usuario_id"); S.etq = mapa(etq, "cartao_id", "etiqueta_id");
+  S.cartoes = d.cartoes.filter(c => ativas.has(c.quadro_id)); S.categorias = d.categorias; S.etiquetas = d.etiquetas;
+  S.resp = mapa(d.resp, "cartao_id", "usuario_id"); S.etq = mapa(d.etq, "cartao_id", "etiqueta_id");
+  S.assin = assinatura(d);
   S.atualizadoEm = new Date();
 }
+async function carregarQuadro() {
+  const d = await buscarQuadro();
+  S.gen++;
+  aplicarQuadro(d);
+}
 function mesclar(row) {
+  S.gen++;
   const { dados_origem, descricao, ...resto } = row;
   const c = cartaoLocal(row.id);
   if (c) Object.assign(c, resto);
@@ -519,7 +531,7 @@ function cabecalho(titulo, sub, extra = "") {
   return `<div class="head"><div><h1>${esc(titulo)}</h1><p class="muted" style="margin:0">${sub}</p></div><div class="tools">${extra}</div></div>`;
 }
 const botoesTopo = () => `<button type="button" data-acao="atualizar" title="Buscar de novo no servidor">Atualizar</button>${quadroAtual() && podeEditar(S.quadroId) ? `<button type="button" class="primary" data-acao="novo">Novo cartão</button>` : ""}`;
-const subAtualizado = () => S.atualizadoEm ? `Atualizado às ${S.atualizadoEm.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}. A tela se atualiza sozinha a cada 30 segundos.` : "";
+const subAtualizado = () => S.atualizadoEm ? `<span class="rot-atualizado">${textoRotulo()}</span>` : "";
 
 const PALETA = [["Azul","#2f6fd6"],["Azul-claro","#1aa3b8"],["Verde","#4caf50"],["Lima","#7fb82a"],["Amarelo","#e0b100"],["Laranja","#e8710a"],["Vermelho","#d64545"],["Rosa","#e0568f"],["Roxo","#8e5bd6"],["Marrom","#8b5e3c"],["Cinza","#6b7280"],["Preto","#1f2937"]];
 const rgbDe = h => { const n = parseInt(h.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
@@ -1611,7 +1623,10 @@ async function render() {
   try { html = (precisaArea && !S.quadros.length) ? `<div class="vazio">Você ainda não tem acesso a nenhuma área. Peça ao administrador para liberar.</div>` : await views[nome](); } catch (e) { erro(e); html = `<div class="vazio">Não foi possível carregar esta tela.</div>`; }
   if (meu !== tokenRender) return;
   const banner = S.verComo ? `<div class="banner" style="position:sticky;top:0;z-index:30;background:#8a4b00;color:#fff;border-color:#8a4b00"><span>Você está vendo o aplicativo como <b>${esc(S.verComo.nome)}</b> (${esc(S.verComo.usuario)})${S.verComo.ativo ? "" : " — usuário inativo"}. Somente visualização: nada é gravado.</span><button type="button" class="small" data-acao="ver-sair">Voltar ao modo administrador</button></div>` : S.eu.trocar_senha ? `<div class="banner"><span>Sua senha é provisória.</span><button type="button" class="small" data-acao="senha">Trocar agora</button></div>` : "";
+  const rol = { y: window.scrollY, x: ($(".kanban") || {}).scrollLeft || 0 };
   tela.innerHTML = banner + html;
+  if (Sync.ultimaRota === nome) { window.scrollTo(0, rol.y); const kb = $(".kanban"); if (kb) kb.scrollLeft = rol.x; }
+  Sync.ultimaRota = nome;
   if (foco) { const el = document.getElementById(foco); if (el && "value" in el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (e) { /* campo sem cursor */ } } }
 }
 async function iniciar() {
@@ -1635,6 +1650,7 @@ document.addEventListener("click", async ev => {
   else if (a === "periodo") { F[el.dataset.grupo].periodo = el.dataset.valor; salvarFiltros(); render(); }
   else if (a === "mais-concluidos") { S.limConcluidos += 20; render(); }
   else if (a === "fechar") fechar();
+  else if (a === "recarregar-cartao") { if (await confirmar("Recarregar descarta o que você digitou neste cartão e ainda não salvou. Continuar?", "Recarregar", false)) abrirCartao(CA.c.id); }
   else if (a === "mudar-data") mudarData(el.dataset.campo);
   else if (a === "comentar") comentar();
   else if (a === "usar-sugerido") { $("#f-valor").value = valorTxt(CA.c.valor_sugerido); }
@@ -1824,14 +1840,100 @@ document.addEventListener("drop", ev => {
 });
 
 window.addEventListener("hashchange", render);
-setInterval(async () => {
-  if (!S.eu || document.hidden || dlg.open || dlg2.open || Drag.ativo || Drag.mouse) return;
-  const ativo = document.activeElement && document.activeElement.tagName;
-  if (["INPUT", "SELECT", "TEXTAREA"].includes(ativo)) return;
-  const rota = (location.hash.replace(/^#\//, "") || "painel").split("?")[0];
-  if (!["painel", "kanban", "conferir", "agenda"].includes(rota)) return;
-  try { await carregarQuadro(); render(); } catch (e) { /* tenta de novo no próximo ciclo */ }
-}, CFG.atualizarACada);
+/* ===================== ATUALIZAÇÃO AUTOMÁTICA (dados separados da tela) ===================== */
+const Sync = { emCurso: false, falhas: 0, avisouFalha: false, repetir: false, pendente: false, ultimaAcao: Date.now(), ultimaTentativa: 0, ultimaRota: null };
+const ROTAS_AUTO = ["painel", "kanban", "conferir", "agenda"];
+const rotaAtual = () => (location.hash.replace(/^#\//, "") || "painel").split("?")[0];
+
+const textoRotulo = () => {
+  const t = S.atualizadoEm ? S.atualizadoEm.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
+  return Sync.falhas >= 3 ? `Sem atualizar desde ${t}. Verifique a internet.` : `Atualizado às ${t}. A tela se atualiza sozinha.`;
+};
+function atualizarRotulo() {
+  const txt = textoRotulo();
+  $$(".rot-atualizado").forEach(el => { el.textContent = txt; el.style.color = Sync.falhas >= 3 ? "var(--danger)" : ""; });
+}
+
+/* só o que a tela mostra: se nada disso mudou, não há o que redesenhar */
+function assinatura(d) {
+  const lig = (arr, a, b) => arr.map(r => r[a] + ">" + r[b]).join(",");
+  return [
+    d.cartoes.map(c => [c.id, c.versao, c.atualizado_em, c.status, c.data_prevista, c.arquivado, c.quadro_id].join("|")).join(";"),
+    d.categorias.map(c => [c.id, c.nome, c.cor].join("|")).join(";"),
+    d.etiquetas.map(e => [e.id, e.nome, e.cor].join("|")).join(";"),
+    lig(d.resp, "cartao_id", "usuario_id"), lig(d.etq, "cartao_id", "etiqueta_id")
+  ].join("#");
+}
+
+/* a tela só é redesenhada quando isso não atrapalha quem está usando */
+function podeRenderizar() {
+  if (Drag.ativo || Drag.mouse || Drag.timer) return false;
+  if (dlg.open || dlg2.open) return false;
+  const a = document.activeElement, tag = a && a.tagName;
+  if (tag === "SELECT" && Date.now() - Sync.ultimaAcao < 8000) return false;
+  if ((tag === "INPUT" || tag === "TEXTAREA") && !a.id) return false;
+  return true;
+}
+function tentarRender() {
+  if (!Sync.pendente) return;
+  if (!S.eu || !ROTAS_AUTO.includes(rotaAtual())) { Sync.pendente = false; return; }
+  if (!podeRenderizar()) return;
+  Sync.pendente = false; render();
+}
+function pedirRender() { Sync.pendente = true; tentarRender(); }
+
+/* avisa dentro do cartão aberto que outra pessoa mexeu nele */
+function verificarCartaoAberto() {
+  if (!dlg.open || !CA || CA.novo || !CA.c || !CA.c.id) return;
+  const atual = cartaoLocal(CA.c.id);
+  let msg = "", recarregar = false;
+  if (!atual) msg = "Este cartão saiu da sua lista: foi excluído ou movido para uma área que você não acessa. Salvar pode dar erro.";
+  else if (atual.versao > CA.c.versao) { msg = `Outra pessoa alterou este cartão (${horaBR(atual.atualizado_em)}). O que aparece aqui está desatualizado e salvar vai dar conflito.`; recarregar = true; }
+  const el = $("#aviso-conflito");
+  if (!msg) { if (el) el.remove(); return; }
+  const html = `<div class="banner" id="aviso-conflito" role="alert"><span>${esc(msg)}</span>${recarregar ? `<button type="button" class="small" data-acao="recarregar-cartao">Recarregar cartão</button>` : ""}</div>`;
+  if (el) el.outerHTML = html; else { const b = $("#f-cartao .barra-cartao"); if (b) b.insertAdjacentHTML("afterend", html); }
+}
+
+async function sincronizar(motivo) {
+  if (!S.eu || !Api.logado || Sync.emCurso) return;
+  if (document.hidden && motivo !== "volta") return;
+  if (motivo === "tempo" && Date.now() - Sync.ultimaAcao > CFG.ociosoApos) return;
+  if (motivo !== "tempo" && Date.now() - Sync.ultimaTentativa < 3000) return;
+  Sync.emCurso = true; Sync.ultimaTentativa = Date.now();
+  const g = S.gen;
+  try {
+    const d = await buscarQuadro();
+    if (g !== S.gen || !S.eu) Sync.repetir = true;   // uma ação local mexeu nos dados durante a busca: descarta esta leitura
+    else {
+      const mudou = (d.vazio ? "" : assinatura(d)) !== S.assin;
+      aplicarQuadro(d);
+      Sync.falhas = 0;
+      if (Sync.avisouFalha) { Sync.avisouFalha = false; aviso("Conexão restabelecida. Tela atualizada."); }
+      if (mudou) { verificarCartaoAberto(); pedirRender(); }
+    }
+  } catch (e) {
+    Sync.falhas++;
+    if (/Sessão expirada/.test(e.message)) erro(e);
+    else if (Sync.falhas >= 3 && !Sync.avisouFalha) { Sync.avisouFalha = true; aviso("Não consigo atualizar a tela automaticamente. Verifique a internet: o que aparece pode estar desatualizado.", "erro"); }
+  } finally { Sync.emCurso = false; atualizarRotulo(); }
+  if (Sync.repetir) { Sync.repetir = false; setTimeout(() => sincronizar("volta"), 1500); }
+}
+
+["pointerdown", "pointermove", "keydown", "change", "input", "wheel", "scroll", "touchstart"].forEach(ev => document.addEventListener(ev, () => {
+  const agora = Date.now(), ocioso = agora - Sync.ultimaAcao > CFG.ociosoApos;
+  Sync.ultimaAcao = agora;
+  if (ocioso) sincronizar("volta");
+}, { capture: true, passive: true }));
+document.addEventListener("focusout", () => setTimeout(tentarRender, 150));
+dlg.addEventListener("close", () => { setTimeout(tentarRender, 100); });
+dlg2.addEventListener("close", () => { setTimeout(tentarRender, 100); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) sincronizar("volta"); });
+window.addEventListener("focus", () => sincronizar("volta"));
+window.addEventListener("online", () => sincronizar("volta"));
+window.addEventListener("hashchange", () => { Sync.pendente = false; sincronizar("volta"); });
+setInterval(tentarRender, 1000);
+setInterval(() => sincronizar("tempo"), CFG.atualizarACada);
 
 /* ===================== INSTALAÇÃO NO CELULAR (PWA) ===================== */
 let promptInstalar = null;
