@@ -2,7 +2,7 @@
   "name": "MINASG GPS - Gestão de Processos e Serviços",
   "short_name": "MINASG GPS",
   "description": "Gestão de processos e serviços da produção e do escritório.",
-  "id": "./",
+  "id": "/minasg-gps/",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
