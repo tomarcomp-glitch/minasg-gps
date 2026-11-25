@@ -1940,9 +1940,15 @@ setInterval(() => sincronizar("tempo"), CFG.atualizarACada);
 /* ===================== CADASTROS DE PRODUÇÃO (administrador) ===================== */
 const TIPOS_SERVICO = { fabricacao: "Processo de Fabricação", humano: "Serviço Humano sem produção", campo: "Serviço de campo" };
 const DICA_TIPO = { fabricacao: "Produz peças: tem quantidade a produzir e consome material.", humano: "Trabalho de pessoa que não gera peças: finaliza com um clique, sem quantidade.", campo: "Medição e instalação: uma unidade por card, com foto na finalização." };
-const FCAD = { aba: "produtos", inativos: false, linha: "", ...pref.ler("cadastros", {}) };
+const FCAD = { aba: "produtos", inativos: false, linha: "", busca: "", ...pref.ler("cadastros", {}) };
 const salvarCad = () => pref.gravar("cadastros", { aba: FCAD.aba, inativos: FCAD.inativos, linha: FCAD.linha });
-const CAD = { servicos: [], motivos: [], intervalos: [], produtos: [], vinculos: [], semProdutos: false, semLinha: false };
+const CAD = { servicos: [], motivos: [], intervalos: [], produtos: [], vinculos: [], desenhos: [], semProdutos: false, semLinha: false, semDesenho: false };
+const uriSvg = svg => "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+const desenhoDe = id => id ? CAD.desenhos.find(d => d.id === id) : null;
+const THUMB = "width:64px;height:48px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:6px;padding:2px;display:block";
+const imgDesenho = (d, estilo) => d ? `<img alt="Desenho: ${esc(d.nome)}" src="${uriSvg(d.svg)}" style="${estilo}">` : "";
+const SVG_MAX = 60000;
+const SVG_PROIBIDO = /<script|javascript:|<iframe|<foreignobject|<image|<use[\s>]|href\s*=|[\s"'\/]on[a-z]+\s*=/i;
 const hhmm = t => t ? String(t).slice(0, 5) : "";
 const minTxt = m => { if (m === null || m === undefined || m === "") return ""; const h = Math.floor(m / 60), r = m % 60; return h ? `${h} h${r ? " " + String(r).padStart(2, "0") : ""}` : `${r} min`; };
 const curto = (t, n) => { const s = String(t || "").replace(/\s+/g, " ").trim(); return s.length > n ? s.slice(0, n - 1) + "…" : s; };
@@ -1950,26 +1956,30 @@ const mesmoNome = (a, b) => String(a).trim().toLowerCase() === String(b).trim().
 
 views.cadastros = async () => {
   if (!admin()) return `<div class="vazio">Só o administrador acessa esta tela.</div>`;
-  const [servicos, motivos, intervalos, prod] = await Promise.all([
+  const [servicos, motivos, intervalos, prod, des] = await Promise.all([
     Api.ler("servicos", { select: "*", order: "nome.asc" }),
     Api.ler("motivos_parada", { select: "*", order: "ordem.asc,nome.asc" }),
     Api.ler("intervalos", { select: "*", order: "inicio.asc" }),
-    Promise.all([Api.ler("produtos", { select: "*", order: "nome.asc" }), Api.ler("produto_processos", { select: "*", order: "produto_id.asc,ordem.asc" })]).catch(() => null)
+    Promise.all([Api.ler("produtos", { select: "*", order: "nome.asc" }), Api.ler("produto_processos", { select: "*", order: "produto_id.asc,ordem.asc" })]).catch(() => null),
+    Api.ler("desenhos", { select: "id,nome,svg,ativo", order: "nome.asc" }).catch(() => null)
   ]);
   CAD.servicos = servicos; CAD.motivos = motivos; CAD.intervalos = intervalos;
   CAD.semProdutos = !prod; CAD.produtos = prod ? prod[0] : []; CAD.vinculos = prod ? prod[1] : [];
   CAD.semLinha = CAD.produtos.length > 0 && !("linha" in CAD.produtos[0]);
+  CAD.desenhos = des || [];
+  CAD.semDesenho = !des || (CAD.produtos.length > 0 && !("desenho_id" in CAD.produtos[0]));
   CAD.produtos.sort((a, b) => String(a.linha || "").localeCompare(String(b.linha || ""), "pt-BR") || a.nome.localeCompare(b.nome, "pt-BR"));
   if (FCAD.linha && !CAD.produtos.some(x => x.linha === FCAD.linha)) FCAD.linha = "";
   const abas = [["produtos", "Produtos", CAD.produtos], ["servicos", "Serviços e processos", servicos], ["motivos", "Motivos de parada", motivos], ["intervalos", "Horários de intervalo", intervalos]];
+  if (!CAD.semDesenho) abas.splice(1, 0, ["desenhos", "Desenhos", CAD.desenhos]);
   if (!abas.some(a => a[0] === FCAD.aba)) FCAD.aba = "produtos";
-  const novo = { produtos: ["cad-prod-novo", "Novo produto"], servicos: ["cad-serv-novo", "Novo serviço"], motivos: ["cad-mot-novo", "Novo motivo"], intervalos: ["cad-int-novo", "Novo intervalo"] }[FCAD.aba];
+  const novo = { produtos: ["cad-prod-novo", "Novo produto"], servicos: ["cad-serv-novo", "Novo serviço"], motivos: ["cad-mot-novo", "Novo motivo"], intervalos: ["cad-int-novo", "Novo intervalo"], desenhos: ["cad-des-novo", "Novo desenho"] }[FCAD.aba];
   const lista = abas.find(a => a[0] === FCAD.aba)[2];
   const inativos = lista.filter(x => !x.ativo).length;
-  const corpo = FCAD.aba === "produtos" ? tabelaProdutos() : FCAD.aba === "servicos" ? tabelaServicos() : FCAD.aba === "motivos" ? tabelaMotivos() : tabelaIntervalos();
-  return cabecalho("Cadastros de produção", "Base de tudo o que vem depois: o produto diz quais processos existem para fabricá-lo, os cards nascem de um serviço, as paradas usam os motivos e os intervalos saem do tempo medido. Só o administrador altera; ninguém apaga, só desativa.", `<button type="button" class="primary" data-acao="${novo[0]}"${FCAD.aba === "produtos" && (CAD.semProdutos || CAD.semLinha) ? " disabled" : ""}>${novo[1]}</button>`) +
+  const corpo = FCAD.aba === "produtos" ? `<div id="cad-prod-tabela">${tabelaProdutos()}</div>` : FCAD.aba === "desenhos" ? tabelaDesenhos() : FCAD.aba === "servicos" ? tabelaServicos() : FCAD.aba === "motivos" ? tabelaMotivos() : tabelaIntervalos();
+  return cabecalho("Cadastros de produção", "Base de tudo o que vem depois: o produto diz quais processos existem para fabricá-lo e qual desenho o representa, os cards nascem de um serviço, as paradas usam os motivos e os intervalos saem do tempo medido. Só o administrador altera; ninguém apaga, só desativa.", `<button type="button" class="primary" data-acao="${novo[0]}"${FCAD.aba === "produtos" && (CAD.semProdutos || CAD.semLinha) ? " disabled" : ""}>${novo[1]}</button>`) +
     `<div class="panel ag-barra"><div class="seg" role="group" aria-label="Cadastro">${abas.map(a => `<button type="button" aria-pressed="${FCAD.aba === a[0]}" data-acao="cad-aba" data-valor="${a[0]}">${a[1]} <span class="muted">(${a[2].filter(x => x.ativo).length})</span></button>`).join("")}</div>
-      ${FCAD.aba === "produtos" && !CAD.semProdutos && !CAD.semLinha ? `<label class="inline">Linha <select data-cd="linha" aria-label="Filtrar por linha"><option value="">Todas</option>${linhasDeProdutos().map(l => `<option value="${esc(l)}"${l === FCAD.linha ? " selected" : ""}>${esc(l)}</option>`).join("")}</select></label>` : ""}
+      ${FCAD.aba === "produtos" && !CAD.semProdutos && !CAD.semLinha ? `<input type="search" data-cd="busca" value="${esc(FCAD.busca)}" placeholder="Pesquisar produto, linha ou processo…" aria-label="Pesquisar produto, linha ou processo" autocomplete="off" style="flex:1;min-width:220px;max-width:380px"><label class="inline">Linha <select data-cd="linha" aria-label="Filtrar por linha"><option value="">Todas</option>${linhasDeProdutos().map(l => `<option value="${esc(l)}"${l === FCAD.linha ? " selected" : ""}>${esc(l)}</option>`).join("")}</select></label>` : ""}
       <label class="inline"><input type="checkbox" data-cd="inativos" ${FCAD.inativos ? "checked" : ""}> Mostrar inativos${inativos ? ` (${inativos})` : ""}</label></div>` + corpo;
 };
 
@@ -2016,22 +2026,31 @@ function conflitoIntervalo(ini, fim, ignorarId) {
 /* ---- produtos e os processos de cada um ---- */
 const servNome = id => { const s = CAD.servicos.find(x => x.id === id); return s ? s.nome : "(processo removido)"; };
 const vinculosDe = id => CAD.vinculos.filter(v => v.produto_id === id).sort((a, b) => a.ordem - b.ordem);
+const norm = t => String(t ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 const linhasDeProdutos = () => [...new Set(CAD.produtos.map(p => p.linha).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR"));
 function tabelaProdutos() {
   if (CAD.semProdutos) return `<div class="panel vazio">O banco ainda não recebeu a atualização 7. Rode o arquivo <b>kanban_atualizacao_7.sql</b> no Supabase (SQL Editor) e recarregue esta tela.</div>`;
   if (CAD.semLinha) return `<div class="panel vazio">O banco ainda não recebeu a atualização 8 (Linha do produto). Rode o arquivo <b>kanban_atualizacao_8.sql</b> no Supabase (SQL Editor) e recarregue esta tela.</div>`;
-  const itens = CAD.produtos.filter(p => (FCAD.inativos || p.ativo) && (!FCAD.linha || p.linha === FCAD.linha));
-  if (!itens.length) return `<div class="panel vazio">${CAD.produtos.length ? "Nenhum produto neste filtro." : "Nenhum produto cadastrado ainda. Use <b>Novo produto</b> (linha e nome) e, depois, o botão <b>Processos</b> para escolher os processos de fabricação na ordem em que acontecem."}</div>`;
+  const termos = norm(FCAD.busca).split(/\s+/).filter(Boolean);
+  const procsDe = p => vinculosDe(p.id).map(v => servNome(v.servico_id));
+  const casa = p => !termos.length || (a => termos.every(t => a.includes(t)))(norm([p.linha, p.nome, p.descricao, ...procsDe(p)].join(" ")));
+  const base = CAD.produtos.filter(p => (FCAD.inativos || p.ativo) && (!FCAD.linha || p.linha === FCAD.linha));
+  const itens = base.filter(casa);
+  if (!itens.length) return `<div class="panel vazio">${termos.length ? `Nenhum produto encontrado para “${esc(FCAD.busca.trim())}”. Procurei no nome, na linha, na descrição e nos processos de cada produto.` : CAD.produtos.length ? "Nenhum produto neste filtro." : "Nenhum produto cadastrado ainda. Use <b>Novo produto</b> (linha e nome) e, depois, o botão <b>Processos</b> para escolher os processos de fabricação na ordem em que acontecem."}</div>`;
   const linhas = itens.map(p => {
     const n = vinculosDe(p.id).length;
+    const achados = termos.length ? [...new Set(procsDe(p).filter(nm => termos.some(t => norm(nm).includes(t))))] : [];
+    const dz = desenhoDe(p.desenho_id);
     return `<tr${p.ativo ? "" : ` style="opacity:.6"`}>
+      ${CAD.semDesenho ? "" : `<td>${dz ? `<button type="button" data-acao="cad-des-ver" data-id="${esc(dz.id)}" aria-label="Ampliar o desenho de ${esc(p.nome)}" style="padding:0;border:0;background:none;cursor:zoom-in">${imgDesenho(dz, THUMB)}</button>` : `<span class="muted">—</span>`}</td>`}
       <td>${p.linha ? esc(p.linha) : `<span class="muted">sem linha</span>`}</td>
-      <td><b>${esc(p.nome)}</b>${p.descricao ? `<span class="muted" style="display:block;font-size:.85rem">${esc(curto(p.descricao, 90))}</span>` : ""}</td>
+      <td><b>${esc(p.nome)}</b>${p.descricao ? `<span class="muted" style="display:block;font-size:.85rem">${esc(curto(p.descricao, 90))}</span>` : ""}${achados.length ? `<span class="muted" style="display:block;font-size:.85rem">Processo: ${achados.map(esc).join(", ")}</span>` : ""}</td>
       <td><button type="button" class="small${n ? "" : " primary"}" data-acao="cad-prod-proc" data-id="${esc(p.id)}">${n ? `Processos (${n})` : "Cadastrar processos"}</button></td>
       <td>${p.ativo ? "Ativo" : "Inativo"}</td>
       <td><button type="button" class="small" data-acao="cad-prod-editar" data-id="${esc(p.id)}">Editar</button></td></tr>`;
   }).join("");
-  return `<div class="panel tabela"><table><thead><tr><th>Linha</th><th>Produto</th><th>Processos</th><th>Situação</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`;
+  const resumo = termos.length ? `<p class="muted" style="margin:0 0 .5rem" role="status">${itens.length} de ${base.length} produto${base.length === 1 ? "" : "s"}</p>` : "";
+  return `<div class="panel tabela">${resumo}<table><thead><tr>${CAD.semDesenho ? "" : "<th>Desenho</th>"}<th>Linha</th><th>Produto</th><th>Processos</th><th>Situação</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`;
 }
 let PE = null;
 function opcoesProcesso() {
@@ -2051,16 +2070,17 @@ function listaProcessosHtml() {
   }).join("")}</ol>`;
 }
 const processosPayload = id => vinculosDe(id).map(v => ({ id: v.id, servico_id: v.servico_id }));
-const msgSalvarProduto = e => /p_linha|Could not find the function/.test(e.message) ? "O banco ainda não recebeu a atualização 8. Rode o arquivo kanban_atualizacao_8.sql no Supabase." : /produtos_linha_nome_uq|duplicate key/.test(e.message) ? "Já existe um produto com esse nome nesta linha." : e.message;
+const msgSalvarProduto = e => /p_desenho_id|p_trocar_desenho/.test(e.message) ? "O banco ainda não recebeu a atualização 9. Rode o arquivo kanban_atualizacao_9.sql no Supabase." : /Desenho não encontrado/.test(e.message) ? "Esse desenho não existe mais. Recarregue a tela e escolha de novo." : /p_linha|Could not find the function/.test(e.message) ? "O banco ainda não recebeu a atualização 8. Rode o arquivo kanban_atualizacao_8.sql no Supabase." : /produtos_linha_nome_uq|duplicate key/.test(e.message) ? "Já existe um produto com esse nome nesta linha." : e.message;
 function abrirProduto(id) {
   const p = id ? CAD.produtos.find(x => x.id === id) : null;
   if (id && !p) return;
   PE = { id: p ? p.id : null, itens: [] };
-  const v = p || { linha: FCAD.linha || "", nome: "", descricao: "", ativo: true };
+  const v = p || { linha: FCAD.linha || "", nome: "", descricao: "", ativo: true, desenho_id: null };
   abrir(`<form id="f-prod" novalidate><div class="barra-cartao"><h2>${p ? "Editar produto" : "Novo produto"}</h2><div class="acoes"><button type="button" data-acao="fechar">Cancelar</button><button type="submit" class="primary">Salvar</button></div></div>
     <div class="field"><label for="pr-linha">Linha *</label><input id="pr-linha" type="text" list="pr-linhas" autocomplete="off" value="${esc(v.linha || "")}" placeholder="Ex.: Suprema, Gold, Linha 42, Portões, Box"><datalist id="pr-linhas">${linhasDeProdutos().map(l => `<option value="${esc(l)}"></option>`).join("")}</datalist></div>
     <div class="field"><label for="pr-nome">Nome do produto *</label><input id="pr-nome" type="text" value="${esc(v.nome)}" placeholder="Ex.: Janela de correr 2 folhas"></div>
     <div class="field"><label for="pr-desc">Descrição</label><textarea id="pr-desc" rows="2">${esc(v.descricao || "")}</textarea></div>
+    ${CAD.semDesenho ? "" : `<div class="field"><label for="pr-des">Desenho</label><div style="display:flex;gap:.75rem;align-items:center"><div id="pr-des-img" style="flex:none">${imgDesenho(desenhoDe(v.desenho_id), THUMB) || `<div class="muted" style="${THUMB};display:flex;align-items:center;justify-content:center">—</div>`}</div><select id="pr-des" data-cd="pr-des" style="flex:1;min-width:0"><option value="">Sem desenho</option>${CAD.desenhos.filter(d => d.ativo || d.id === v.desenho_id).map(d => `<option value="${esc(d.id)}"${d.id === v.desenho_id ? " selected" : ""}>${esc(d.nome)}${d.ativo ? "" : " (inativo)"}</option>`).join("")}</select></div><div class="muted" style="font-size:.85rem;margin-top:.2rem">O mesmo desenho pode servir a vários produtos (cadastre os desenhos na aba Desenhos).</div></div>`}
     ${p ? `<div class="field"><label class="inline"><input type="checkbox" id="pr-ativo" ${p.ativo ? "checked" : ""}> Ativo</label><div class="muted" style="font-size:.85rem;margin-top:.2rem">Inativo some das listas de novos pedidos. O que já foi feito continua guardado.</div></div>` : `<div class="muted" style="font-size:.85rem">Depois de salvar, a lista de processos de fabricação abre para você cadastrar.</div>`}
     <div class="erro-campo" id="e-prod" role="alert"></div></form>`);
   $(p ? "#pr-nome" : "#pr-linha").focus();
@@ -2072,11 +2092,85 @@ async function salvarProduto() {
   if (nome.length < 2) { erroEl.textContent = "Escreva o nome do produto."; return; }
   if (CAD.produtos.some(x => x.id !== PE.id && mesmoNome(x.nome, nome) && mesmoNome(x.linha || "", linha))) { erroEl.textContent = "Já existe um produto com esse nome nesta linha."; return; }
   const b = $('#f-prod button[type="submit"]'); b.disabled = true; erroEl.textContent = "";
+  const args = { p_id: PE.id, p_nome: nome, p_descricao: $("#pr-desc").value.trim() || null, p_ativo: PE.id ? $("#pr-ativo").checked : true, p_processos: PE.id ? processosPayload(PE.id) : [], p_linha: linha };
+  const sel = $("#pr-des");
+  if (sel) {
+    const atual = PE.id ? (CAD.produtos.find(x => x.id === PE.id) || {}).desenho_id || null : null, novoId = sel.value || null;
+    if (novoId !== atual) { args.p_desenho_id = novoId; args.p_trocar_desenho = true; }
+  }
   try {
-    const id = await Api.rpc("salvar_produto", { p_id: PE.id, p_nome: nome, p_descricao: $("#pr-desc").value.trim() || null, p_ativo: PE.id ? $("#pr-ativo").checked : true, p_processos: PE.id ? processosPayload(PE.id) : [], p_linha: linha });
+    const id = await Api.rpc("salvar_produto", args);
     const novo = !PE.id; PE = null; fechar(); aviso(novo ? "Produto criado." : "Produto atualizado."); await render();
     if (novo && typeof id === "string") abrirProcessos(id);
   } catch (e) { erroEl.textContent = msgSalvarProduto(e); b.disabled = false; }
+}
+/* ===================== DESENHOS (biblioteca de SVG reaproveitável) ===================== */
+let DE = null;
+const usoDesenho = id => CAD.produtos.filter(p => p.desenho_id === id);
+function tabelaDesenhos() {
+  const itens = CAD.desenhos.filter(d => FCAD.inativos || d.ativo);
+  if (!itens.length) return `<div class="panel vazio">Nenhum desenho cadastrado. Use <b>Novo desenho</b> e envie um arquivo SVG (desenho vetorial, leve e nítido). Depois escolha o desenho no cadastro do produto; o mesmo desenho pode servir a vários produtos.</div>`;
+  const linhas = itens.map(d => {
+    const usos = usoDesenho(d.id);
+    return `<tr${d.ativo ? "" : ` style="opacity:.6"`}>
+      <td><button type="button" data-acao="cad-des-ver" data-id="${esc(d.id)}" aria-label="Ampliar ${esc(d.nome)}" style="padding:0;border:0;background:none;cursor:zoom-in">${imgDesenho(d, THUMB)}</button></td>
+      <td><b>${esc(d.nome)}</b><span class="muted" style="display:block;font-size:.85rem">${(d.svg.length / 1024).toFixed(1).replace(".", ",")} KB</span></td>
+      <td>${usos.length ? `<b>${usos.length}</b> produto${usos.length === 1 ? "" : "s"}<span class="muted" style="display:block;font-size:.85rem">${esc(curto(usos.map(p => (p.linha ? p.linha + " · " : "") + p.nome).join("; "), 110))}</span>` : `<span class="muted">nenhum</span>`}</td>
+      <td>${d.ativo ? "Ativo" : "Inativo"}</td>
+      <td><button type="button" class="small" data-acao="cad-des-editar" data-id="${esc(d.id)}">Editar</button></td></tr>`;
+  }).join("");
+  return `<div class="panel tabela"><table><thead><tr><th>Desenho</th><th>Nome</th><th>Usado em</th><th>Situação</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`;
+}
+function verDesenho(id) {
+  const d = desenhoDe(id); if (!d) return;
+  const usos = usoDesenho(id);
+  abrir(`<div class="barra-cartao"><h2>${esc(d.nome)}</h2><div class="acoes"><button type="button" data-acao="fechar">Fechar</button></div></div>
+    <div style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:.75rem;text-align:center"><img alt="Desenho: ${esc(d.nome)}" src="${uriSvg(d.svg)}" style="max-width:100%;max-height:60vh;height:auto"></div>
+    <p class="muted" style="margin:.6rem 0 0;font-size:.9rem">${usos.length ? `Usado em: ${usos.map(p => esc((p.linha ? p.linha + " · " : "") + p.nome)).join("; ")}.` : "Nenhum produto usa este desenho ainda."}</p>`);
+}
+function limpaSvg(txt) {
+  return String(txt).replace(/^﻿/, "").replace(/<\?xml[\s\S]*?\?>/gi, "").replace(/<!DOCTYPE[\s\S]*?>/gi, "").replace(/<!--[\s\S]*?-->/g, "").trim();
+}
+function erroSvg(svg) {
+  if (!/^<svg[\s>]/i.test(svg) || !/<\/svg>\s*$/i.test(svg)) return "O arquivo não é um SVG válido (precisa começar em <svg e terminar em </svg>). Imagens PNG e JPG não servem aqui; exporte o desenho como SVG.";
+  if (svg.length > SVG_MAX) return `O SVG tem ${(svg.length / 1024).toFixed(0)} KB e o máximo é ${SVG_MAX / 1000} KB. Exporte como "SVG simples" ou simplifique o desenho.`;
+  if (SVG_PROIBIDO.test(svg)) return "O SVG tem script, link, evento ou imagem embutida, que não são aceitos. Exporte um SVG só com linhas e formas.";
+  return "";
+}
+function abrirDesenho(id) {
+  const d = id ? desenhoDe(id) : null;
+  if (id && !d) return;
+  DE = { id: d ? d.id : null, svg: d ? d.svg : null, novoArquivo: false };
+  abrir(`<form id="f-des" novalidate><div class="barra-cartao"><h2>${d ? "Editar desenho" : "Novo desenho"}</h2><div class="acoes"><button type="button" data-acao="fechar">Cancelar</button><button type="submit" class="primary">Salvar</button></div></div>
+    <div class="field"><label for="de-nome">Nome do desenho *</label><input id="de-nome" type="text" value="${esc(d ? d.nome : "")}" placeholder="Ex.: Janela de correr 2 folhas"></div>
+    <div class="field"><label for="de-arq">Arquivo SVG ${d ? "(opcional: só se quiser trocar)" : "*"}</label><input id="de-arq" type="file" data-cd="des-arquivo" accept=".svg,image/svg+xml"><div class="muted" style="font-size:.85rem;margin-top:.2rem">Só SVG (vetorial: nítido em qualquer tamanho e leve). Máximo ${SVG_MAX / 1000} KB; sem script, link nem imagem embutida.</div></div>
+    <div id="de-previa" style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:.5rem;text-align:center;min-height:5rem">${d ? imgDesenho(d, "max-width:100%;max-height:40vh;height:auto") : `<span class="muted">A prévia aparece aqui.</span>`}</div>
+    ${d ? `<div class="field" style="margin-top:.6rem"><label class="inline"><input type="checkbox" id="de-ativo" ${d.ativo ? "checked" : ""}> Ativo</label><div class="muted" style="font-size:.85rem;margin-top:.2rem">Inativo não aparece para escolher em novos produtos; os produtos que já usam continuam mostrando.</div></div>` : ""}
+    <div class="erro-campo" id="e-des" role="alert"></div></form>`);
+  $("#de-nome").focus();
+  $("#f-des").onsubmit = ev => { ev.preventDefault(); salvarDesenho(); };
+}
+async function lerArquivoSvg(arq) {
+  const erroEl = $("#e-des"), prev = $("#de-previa"); erroEl.textContent = "";
+  if (!arq) return;
+  if (arq.size > SVG_MAX * 2) { erroEl.textContent = `O arquivo tem ${(arq.size / 1024).toFixed(0)} KB; o máximo é ${SVG_MAX / 1000} KB.`; return; }
+  const svg = limpaSvg(await arq.text()), er = erroSvg(svg);
+  if (er) { erroEl.textContent = er; DE.svg = DE.id ? (desenhoDe(DE.id) || {}).svg : null; DE.novoArquivo = false; return; }
+  DE.svg = svg; DE.novoArquivo = true;
+  prev.innerHTML = imgDesenho({ nome: "prévia", svg }, "max-width:100%;max-height:40vh;height:auto");
+  const nome = $("#de-nome"); if (!nome.value.trim()) nome.value = arq.name.replace(/\.svg$/i, "").replace(/[_-]+/g, " ").trim();
+}
+const msgSalvarDesenho = e => /Could not find the function|salvar_desenho/.test(e.message) && !/Só o administrador/.test(e.message) ? "O banco ainda não recebeu a atualização 9. Rode o arquivo kanban_atualizacao_9.sql no Supabase." : /desenhos_nome_uq|duplicate key/.test(e.message) ? "Já existe um desenho com esse nome." : /desenhos_svg_check|violates check/.test(e.message) ? "O banco recusou o SVG (script, link, imagem embutida ou mais de 60 KB)." : e.message;
+async function salvarDesenho() {
+  const erroEl = $("#e-des"), nome = $("#de-nome").value.trim();
+  if (nome.length < 2) { erroEl.textContent = "Escreva o nome do desenho."; return; }
+  if (!DE.id && !DE.svg) { erroEl.textContent = "Escolha o arquivo SVG do desenho."; return; }
+  if (CAD.desenhos.some(x => x.id !== DE.id && mesmoNome(x.nome, nome))) { erroEl.textContent = "Já existe um desenho com esse nome."; return; }
+  const b = $('#f-des button[type="submit"]'); b.disabled = true; erroEl.textContent = "";
+  try {
+    await Api.rpc("salvar_desenho", { p_id: DE.id, p_nome: nome, p_svg: DE.novoArquivo || !DE.id ? DE.svg : null, p_ativo: DE.id ? $("#de-ativo").checked : true });
+    const novo = !DE.id; DE = null; fechar(); aviso(novo ? "Desenho cadastrado." : "Desenho atualizado."); await render();
+  } catch (e) { erroEl.textContent = msgSalvarDesenho(e); b.disabled = false; }
 }
 /* botão Processos: ver e cadastrar os processos de fabricação do produto */
 function abrirProcessos(id) {
@@ -2211,6 +2305,9 @@ document.addEventListener("click", ev => {
   else if (a === "cad-prod-novo") abrirProduto(null);
   else if (a === "cad-prod-editar") abrirProduto(id);
   else if (a === "cad-prod-proc") abrirProcessos(id);
+  else if (a === "cad-des-novo") abrirDesenho(null);
+  else if (a === "cad-des-editar") abrirDesenho(id);
+  else if (a === "cad-des-ver") verDesenho(id);
   else if (a === "cad-prod-add") { const v = $("#pr-add").value; if (!v) { aviso("Escolha um processo na lista.", "erro"); return; } PE.itens.push({ id: null, servico_id: v }); atualizaListaProduto(); }
   else if (a === "cad-prod-novo-proc") novoProcessoNoProduto();
   else if (a === "cad-prod-sobe" || a === "cad-prod-desce") { const i = Number(el.dataset.i), j = a === "cad-prod-sobe" ? i - 1 : i + 1; if (PE && j >= 0 && j < PE.itens.length) { [PE.itens[i], PE.itens[j]] = [PE.itens[j], PE.itens[i]]; atualizaListaProduto(); } }
@@ -2220,10 +2317,17 @@ document.addEventListener("click", ev => {
   else if (a === "cad-mot-novo") novoMotivo();
   else if (a === "cad-int-novo") abrirIntervalo();
 });
+document.addEventListener("input", ev => {
+  const t = ev.target; if (!t.dataset || t.dataset.cd !== "busca") return;
+  FCAD.busca = t.value;
+  const box = $("#cad-prod-tabela"); if (box) box.innerHTML = tabelaProdutos();
+});
 document.addEventListener("change", async ev => {
-  const t = ev.target, cd = t.dataset && t.dataset.cd; if (!cd) return;
+  const t = ev.target, cd = t.dataset && t.dataset.cd; if (!cd || cd === "busca") return;
   if (cd === "inativos") { FCAD.inativos = t.checked; salvarCad(); render(); return; }
   if (cd === "linha") { FCAD.linha = t.value; salvarCad(); render(); return; }
+  if (cd === "pr-des") { const box = $("#pr-des-img"), d = desenhoDe(t.value); if (box) box.innerHTML = d ? imgDesenho(d, THUMB) : `<div class="muted" style="${THUMB};display:flex;align-items:center;justify-content:center">—</div>`; return; }
+  if (cd === "des-arquivo") { await lerArquivoSvg(t.files && t.files[0]); return; }
   const id = t.dataset.id;
   try {
     if (cd.startsWith("mot-")) {
