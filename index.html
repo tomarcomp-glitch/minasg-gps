@@ -305,6 +305,7 @@ const Api = (() => {
     if (/row-level security|permission denied/i.test(m)) return "Você não tem permissão para esta ação.";
     if (/(column|schema cache)/i.test(m) && /(hora_prevista|hora_fim|campos|usa_financeiro|ordem|ativo)/i.test(m)) return "O banco ainda não recebeu a atualização 1. Rode o arquivo kanban_atualizacao_1.sql no Supabase.";
     if (/(servicos|motivos_parada|intervalos)/i.test(m) && /(schema cache|does not exist|relation|table)/i.test(m)) return "O banco ainda não recebeu a atualização 6. Rode o arquivo kanban_atualizacao_6.sql no Supabase.";
+    if (/(produtos|produto_processos|salvar_produto)/i.test(m) && /(schema cache|does not exist|relation|table|function)/i.test(m)) return "O banco ainda não recebeu a atualização 7. Rode o arquivo kanban_atualizacao_7.sql no Supabase.";
     if (/duplicate key/i.test(m)) return "Já existe um registro igual.";
     if (/JWT expired|invalid JWT/i.test(m)) return "Sessão expirada. Entre de novo.";
     return m;
@@ -1939,9 +1940,9 @@ setInterval(() => sincronizar("tempo"), CFG.atualizarACada);
 /* ===================== CADASTROS DE PRODUÇÃO (administrador) ===================== */
 const TIPOS_SERVICO = { fabricacao: "Processo de Fabricação", humano: "Serviço Humano sem produção", campo: "Serviço de campo" };
 const DICA_TIPO = { fabricacao: "Produz peças: tem quantidade a produzir e consome material.", humano: "Trabalho de pessoa que não gera peças: finaliza com um clique, sem quantidade.", campo: "Medição e instalação: uma unidade por card, com foto na finalização." };
-const FCAD = { aba: "servicos", inativos: false, ...pref.ler("cadastros", {}) };
+const FCAD = { aba: "produtos", inativos: false, ...pref.ler("cadastros", {}) };
 const salvarCad = () => pref.gravar("cadastros", { aba: FCAD.aba, inativos: FCAD.inativos });
-const CAD = { servicos: [], motivos: [], intervalos: [] };
+const CAD = { servicos: [], motivos: [], intervalos: [], produtos: [], vinculos: [], semProdutos: false };
 const hhmm = t => t ? String(t).slice(0, 5) : "";
 const minTxt = m => { if (m === null || m === undefined || m === "") return ""; const h = Math.floor(m / 60), r = m % 60; return h ? `${h} h${r ? " " + String(r).padStart(2, "0") : ""}` : `${r} min`; };
 const curto = (t, n) => { const s = String(t || "").replace(/\s+/g, " ").trim(); return s.length > n ? s.slice(0, n - 1) + "…" : s; };
@@ -1949,19 +1950,21 @@ const mesmoNome = (a, b) => String(a).trim().toLowerCase() === String(b).trim().
 
 views.cadastros = async () => {
   if (!admin()) return `<div class="vazio">Só o administrador acessa esta tela.</div>`;
-  const [servicos, motivos, intervalos] = await Promise.all([
+  const [servicos, motivos, intervalos, prod] = await Promise.all([
     Api.ler("servicos", { select: "*", order: "nome.asc" }),
     Api.ler("motivos_parada", { select: "*", order: "ordem.asc,nome.asc" }),
-    Api.ler("intervalos", { select: "*", order: "inicio.asc" })
+    Api.ler("intervalos", { select: "*", order: "inicio.asc" }),
+    Promise.all([Api.ler("produtos", { select: "*", order: "nome.asc" }), Api.ler("produto_processos", { select: "*", order: "produto_id.asc,ordem.asc" })]).catch(() => null)
   ]);
   CAD.servicos = servicos; CAD.motivos = motivos; CAD.intervalos = intervalos;
-  const abas = [["servicos", "Serviços e processos", servicos], ["motivos", "Motivos de parada", motivos], ["intervalos", "Horários de intervalo", intervalos]];
-  if (!abas.some(a => a[0] === FCAD.aba)) FCAD.aba = "servicos";
-  const novo = { servicos: ["cad-serv-novo", "Novo serviço"], motivos: ["cad-mot-novo", "Novo motivo"], intervalos: ["cad-int-novo", "Novo intervalo"] }[FCAD.aba];
+  CAD.semProdutos = !prod; CAD.produtos = prod ? prod[0] : []; CAD.vinculos = prod ? prod[1] : [];
+  const abas = [["produtos", "Produtos", CAD.produtos], ["servicos", "Serviços e processos", servicos], ["motivos", "Motivos de parada", motivos], ["intervalos", "Horários de intervalo", intervalos]];
+  if (!abas.some(a => a[0] === FCAD.aba)) FCAD.aba = "produtos";
+  const novo = { produtos: ["cad-prod-novo", "Novo produto"], servicos: ["cad-serv-novo", "Novo serviço"], motivos: ["cad-mot-novo", "Novo motivo"], intervalos: ["cad-int-novo", "Novo intervalo"] }[FCAD.aba];
   const lista = abas.find(a => a[0] === FCAD.aba)[2];
   const inativos = lista.filter(x => !x.ativo).length;
-  const corpo = FCAD.aba === "servicos" ? tabelaServicos() : FCAD.aba === "motivos" ? tabelaMotivos() : tabelaIntervalos();
-  return cabecalho("Cadastros de produção", "Base de tudo o que vem depois: os cards nascem de um serviço, as paradas usam os motivos e os intervalos saem do tempo medido. Só o administrador altera; ninguém apaga, só desativa.", `<button type="button" class="primary" data-acao="${novo[0]}">${novo[1]}</button>`) +
+  const corpo = FCAD.aba === "produtos" ? tabelaProdutos() : FCAD.aba === "servicos" ? tabelaServicos() : FCAD.aba === "motivos" ? tabelaMotivos() : tabelaIntervalos();
+  return cabecalho("Cadastros de produção", "Base de tudo o que vem depois: o produto diz quais processos existem para fabricá-lo, os cards nascem de um serviço, as paradas usam os motivos e os intervalos saem do tempo medido. Só o administrador altera; ninguém apaga, só desativa.", `<button type="button" class="primary" data-acao="${novo[0]}"${FCAD.aba === "produtos" && CAD.semProdutos ? " disabled" : ""}>${novo[1]}</button>`) +
     `<div class="panel ag-barra"><div class="seg" role="group" aria-label="Cadastro">${abas.map(a => `<button type="button" aria-pressed="${FCAD.aba === a[0]}" data-acao="cad-aba" data-valor="${a[0]}">${a[1]} <span class="muted">(${a[2].filter(x => x.ativo).length})</span></button>`).join("")}</div>
       <label class="inline"><input type="checkbox" data-cd="inativos" ${FCAD.inativos ? "checked" : ""}> Mostrar inativos${inativos ? ` (${inativos})` : ""}</label></div>` + corpo;
 };
@@ -2004,6 +2007,89 @@ const duracaoMin = (a, b) => paraMin(b) - paraMin(a);
 function conflitoIntervalo(ini, fim, ignorarId) {
   const o = CAD.intervalos.find(x => x.ativo && x.id !== ignorarId && paraMin(ini) < paraMin(x.fim) && paraMin(x.inicio) < paraMin(fim));
   return o ? `Este horário se sobrepõe a "${o.nome}" (${hhmm(o.inicio)} a ${hhmm(o.fim)}).` : "";
+}
+
+/* ---- produtos e os processos de cada um ---- */
+const servNome = id => { const s = CAD.servicos.find(x => x.id === id); return s ? s.nome : "(processo removido)"; };
+const vinculosDe = id => CAD.vinculos.filter(v => v.produto_id === id).sort((a, b) => a.ordem - b.ordem);
+function tabelaProdutos() {
+  if (CAD.semProdutos) return `<div class="panel vazio">O banco ainda não recebeu a atualização 7. Rode o arquivo <b>kanban_atualizacao_7.sql</b> no Supabase (SQL Editor) e recarregue esta tela.</div>`;
+  const itens = CAD.produtos.filter(p => FCAD.inativos || p.ativo);
+  if (!itens.length) return `<div class="panel vazio">Nenhum produto cadastrado ainda. Use <b>Novo produto</b> e, dentro dele, escolha os processos de fabricação na ordem em que acontecem. Os processos vêm da aba <b>Serviços e processos</b>, e você também pode criar um novo direto no produto.</div>`;
+  const linhas = itens.map(p => {
+    const vs = vinculosDe(p.id);
+    const lista = vs.length ? vs.map((v, i) => `${i + 1}. ${esc(servNome(v.servico_id))}`).join(` <span class="muted">›</span> `) : `<span class="muted">nenhum processo ainda</span>`;
+    return `<tr${p.ativo ? "" : ` style="opacity:.6"`}>
+      <td><b>${esc(p.nome)}</b>${p.descricao ? `<span class="muted" style="display:block;font-size:.85rem">${esc(curto(p.descricao, 90))}</span>` : ""}</td>
+      <td>${lista}</td>
+      <td class="n">${vs.length}</td>
+      <td>${p.ativo ? "Ativo" : "Inativo"}</td>
+      <td><button type="button" class="small" data-acao="cad-prod-editar" data-id="${esc(p.id)}">Editar</button></td></tr>`;
+  }).join("");
+  return `<div class="panel tabela"><table><thead><tr><th>Produto</th><th>Processos de fabricação, na ordem</th><th class="n">Qtde</th><th>Situação</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`;
+}
+let PE = null;
+function opcoesProcesso() {
+  const ativos = CAD.servicos.filter(s => s.ativo).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  return `<option value="">Escolha um processo…</option>` + ativos.map(s => `<option value="${esc(s.id)}">${esc(s.nome)} — ${esc(TIPOS_SERVICO[s.tipo] || s.tipo)}</option>`).join("");
+}
+function listaProcessosHtml() {
+  if (!PE.itens.length) return `<div class="vazio" style="padding:1rem">Nenhum processo ainda. Escolha abaixo ou crie um novo.</div>`;
+  return `<ol style="list-style:none;margin:0;padding:0">${PE.itens.map((it, i) => {
+    const s = CAD.servicos.find(x => x.id === it.servico_id);
+    return `<li style="display:flex;gap:.5rem;align-items:center;padding:.35rem 0;border-bottom:1px solid var(--line)">
+      <span class="n" style="min-width:1.8rem"><b>${i + 1}.</b></span>
+      <span style="flex:1"><b>${esc(servNome(it.servico_id))}</b>${s && !s.ativo ? ` <span class="muted">(inativo)</span>` : ""}<span class="muted" style="display:block;font-size:.85rem">${esc(s ? TIPOS_SERVICO[s.tipo] || s.tipo : "")}</span></span>
+      <button type="button" class="small" data-acao="cad-prod-sobe" data-i="${i}" aria-label="Subir ${esc(servNome(it.servico_id))}"${i === 0 ? " disabled" : ""}>↑</button>
+      <button type="button" class="small" data-acao="cad-prod-desce" data-i="${i}" aria-label="Descer ${esc(servNome(it.servico_id))}"${i === PE.itens.length - 1 ? " disabled" : ""}>↓</button>
+      <button type="button" class="small danger" data-acao="cad-prod-tira" data-i="${i}" aria-label="Tirar ${esc(servNome(it.servico_id))} da lista">Tirar</button></li>`;
+  }).join("")}</ol>`;
+}
+function abrirProduto(id) {
+  const p = id ? CAD.produtos.find(x => x.id === id) : null;
+  if (id && !p) return;
+  PE = { id: p ? p.id : null, itens: p ? vinculosDe(p.id).map(v => ({ id: v.id, servico_id: v.servico_id })) : [] };
+  const v = p || { nome: "", descricao: "", ativo: true };
+  abrir(`<form id="f-prod" novalidate><div class="barra-cartao"><h2>${p ? "Editar produto" : "Novo produto"}</h2><div class="acoes"><button type="button" data-acao="fechar">Cancelar</button><button type="submit" class="primary">Salvar</button></div></div>
+    <div class="field"><label for="pr-nome">Nome do produto *</label><input id="pr-nome" type="text" value="${esc(v.nome)}" placeholder="Ex.: Janela de correr 2 folhas"></div>
+    <div class="field"><label for="pr-desc">Descrição</label><textarea id="pr-desc" rows="2">${esc(v.descricao || "")}</textarea></div>
+    <div class="field"><label>Processos de fabricação, na ordem em que acontecem</label><div id="pr-lista">${listaProcessosHtml()}</div></div>
+    <div class="field" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end">
+      <div style="flex:1;min-width:220px"><label for="pr-add">Adicionar processo</label><select id="pr-add">${opcoesProcesso()}</select></div>
+      <button type="button" data-acao="cad-prod-add">Adicionar</button>
+      <button type="button" data-acao="cad-prod-novo-proc">Criar novo processo</button></div>
+    <div class="muted" style="font-size:.85rem">O novo processo nasce como Processo de Fabricação; os detalhes (instruções, fotos, tempo limite) você completa na aba Serviços e processos. Para voltar uma etapa, use ↑ e ↓.</div>
+    ${p ? `<div class="field" style="margin-top:.8rem"><label class="inline"><input type="checkbox" id="pr-ativo" ${p.ativo ? "checked" : ""}> Ativo</label><div class="muted" style="font-size:.85rem;margin-top:.2rem">Inativo some das listas de novos pedidos. O que já foi feito continua guardado.</div></div>` : ""}
+    <div class="erro-campo" id="e-prod" role="alert"></div></form>`, true);
+  if (!p) $("#pr-nome").focus();
+  $("#f-prod").onsubmit = ev => { ev.preventDefault(); salvarProduto(); };
+}
+const atualizaListaProduto = () => { const el = $("#pr-lista"); if (el) el.innerHTML = listaProcessosHtml(); const sel = $("#pr-add"); if (sel) sel.innerHTML = opcoesProcesso(); };
+async function salvarProduto() {
+  const erroEl = $("#e-prod"), nome = $("#pr-nome").value.trim();
+  if (nome.length < 2) { erroEl.textContent = "Escreva o nome do produto."; return; }
+  if (CAD.produtos.some(x => x.id !== PE.id && mesmoNome(x.nome, nome))) { erroEl.textContent = "Já existe um produto com esse nome."; return; }
+  const b = $('#f-prod button[type="submit"]'); b.disabled = true; erroEl.textContent = "";
+  try {
+    await Api.rpc("salvar_produto", { p_id: PE.id, p_nome: nome, p_descricao: $("#pr-desc").value.trim() || null, p_ativo: PE.id ? $("#pr-ativo").checked : true, p_processos: PE.itens.map(i => ({ id: i.id || null, servico_id: i.servico_id })) });
+    const novo = !PE.id; PE = null; fechar(); aviso(novo ? "Produto criado." : "Produto atualizado."); render();
+  } catch (e) {
+    erroEl.textContent = /Could not find the function|salvar_produto/.test(e.message) && !/administrador/.test(e.message) ? "O banco ainda não recebeu a atualização 7. Rode o arquivo kanban_atualizacao_7.sql no Supabase." : e.message;
+    b.disabled = false;
+  }
+}
+async function novoProcessoNoProduto() {
+  const nome = await pedirTexto("Novo processo de fabricação", "Nome do processo (ex.: Cortar perfil)", "Criar e adicionar");
+  if (nome === null) return;
+  const n = nome.trim();
+  if (n.length < 2) { aviso("Escreva o nome do processo.", "erro"); return; }
+  const ja = CAD.servicos.find(s => mesmoNome(s.nome, n));
+  if (ja) { aviso(ja.ativo ? `Já existe "${ja.nome}" em Serviços e processos. Escolha na lista.` : `"${ja.nome}" existe, mas está inativo. Reative em Serviços e processos.`, "erro"); return; }
+  try {
+    const r = await Api.inserir("servicos", { nome: n, tipo: "fabricacao" });
+    const s = r && r[0]; if (!s) throw new Error("Não foi possível criar o processo.");
+    CAD.servicos.push(s); PE.itens.push({ id: null, servico_id: s.id }); atualizaListaProduto(); aviso("Processo criado e adicionado.");
+  } catch (e) { erro(e); }
 }
 
 /* ---- serviços ---- */
@@ -2096,6 +2182,12 @@ document.addEventListener("click", ev => {
   const el = ev.target.closest('[data-acao^="cad-"]'); if (!el) return;
   const a = el.dataset.acao, id = el.dataset.id;
   if (a === "cad-aba") { FCAD.aba = el.dataset.valor; salvarCad(); render(); }
+  else if (a === "cad-prod-novo") abrirProduto(null);
+  else if (a === "cad-prod-editar") abrirProduto(id);
+  else if (a === "cad-prod-add") { const v = $("#pr-add").value; if (!v) { aviso("Escolha um processo na lista.", "erro"); return; } PE.itens.push({ id: null, servico_id: v }); atualizaListaProduto(); }
+  else if (a === "cad-prod-novo-proc") novoProcessoNoProduto();
+  else if (a === "cad-prod-sobe" || a === "cad-prod-desce") { const i = Number(el.dataset.i), j = a === "cad-prod-sobe" ? i - 1 : i + 1; if (PE && j >= 0 && j < PE.itens.length) { [PE.itens[i], PE.itens[j]] = [PE.itens[j], PE.itens[i]]; atualizaListaProduto(); } }
+  else if (a === "cad-prod-tira") { PE.itens.splice(Number(el.dataset.i), 1); atualizaListaProduto(); }
   else if (a === "cad-serv-novo") abrirServico(null);
   else if (a === "cad-serv-editar") abrirServico(id);
   else if (a === "cad-mot-novo") novoMotivo();
