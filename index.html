@@ -304,6 +304,7 @@ const Api = (() => {
     if (!m) return "Erro " + status;
     if (/row-level security|permission denied/i.test(m)) return "Você não tem permissão para esta ação.";
     if (/(column|schema cache)/i.test(m) && /(hora_prevista|hora_fim|campos|usa_financeiro|ordem|ativo)/i.test(m)) return "O banco ainda não recebeu a atualização 1. Rode o arquivo kanban_atualizacao_1.sql no Supabase.";
+    if (/(servicos|motivos_parada|intervalos)/i.test(m) && /(schema cache|does not exist|relation|table)/i.test(m)) return "O banco ainda não recebeu a atualização 6. Rode o arquivo kanban_atualizacao_6.sql no Supabase.";
     if (/duplicate key/i.test(m)) return "Já existe um registro igual.";
     if (/JWT expired|invalid JWT/i.test(m)) return "Sessão expirada. Entre de novo.";
     return m;
@@ -1606,7 +1607,7 @@ function montarShell() {
     <a href="#/kanban" data-rota="kanban">Kanban</a>
     <a href="#/agenda" data-rota="agenda">Agenda</a>
     <a href="#/conferir" data-rota="conferir">Conferir importados</a>
-    ${a ? `<div class="side-grupo">Administração</div><a href="#/lixeira" data-rota="lixeira">Lixeira</a><a href="#/usuarios" data-rota="usuarios">Usuários</a><a href="#/areas" data-rota="areas">Áreas e campos</a><a href="#/importar" data-rota="importar">Importar do Trello</a><a href="#/backup" data-rota="backup">Backup</a>` : ""}
+    ${a ? `<div class="side-grupo">Administração</div><a href="#/lixeira" data-rota="lixeira">Lixeira</a><a href="#/usuarios" data-rota="usuarios">Usuários</a><a href="#/areas" data-rota="areas">Áreas e campos</a><a href="#/cadastros" data-rota="cadastros">Cadastros de produção</a><a href="#/importar" data-rota="importar">Importar do Trello</a><a href="#/backup" data-rota="backup">Backup</a>` : ""}
     <div class="side-fim"><span class="muted">${esc(S.verComo ? S.verComo.nome : S.eu.nome)}</span>${instalado ? "" : `<button type="button" class="small" data-acao="instalar">Instalar no celular</button>`}<button type="button" class="small" data-acao="senha">Trocar senha</button><button type="button" class="small" data-acao="sair">Sair</button></div>
   </nav><main id="tela" tabindex="-1"></main></div>`;
 }
@@ -1934,6 +1935,216 @@ window.addEventListener("online", () => sincronizar("volta"));
 window.addEventListener("hashchange", () => { Sync.pendente = false; sincronizar("volta"); });
 setInterval(tentarRender, 1000);
 setInterval(() => sincronizar("tempo"), CFG.atualizarACada);
+
+/* ===================== CADASTROS DE PRODUÇÃO (administrador) ===================== */
+const TIPOS_SERVICO = { fabricacao: "Processo de Fabricação", humano: "Serviço Humano sem produção", campo: "Serviço de campo" };
+const DICA_TIPO = { fabricacao: "Produz peças: tem quantidade a produzir e consome material.", humano: "Trabalho de pessoa que não gera peças: finaliza com um clique, sem quantidade.", campo: "Medição e instalação: uma unidade por card, com foto na finalização." };
+const FCAD = { aba: "servicos", inativos: false, ...pref.ler("cadastros", {}) };
+const salvarCad = () => pref.gravar("cadastros", { aba: FCAD.aba, inativos: FCAD.inativos });
+const CAD = { servicos: [], motivos: [], intervalos: [] };
+const hhmm = t => t ? String(t).slice(0, 5) : "";
+const minTxt = m => { if (m === null || m === undefined || m === "") return ""; const h = Math.floor(m / 60), r = m % 60; return h ? `${h} h${r ? " " + String(r).padStart(2, "0") : ""}` : `${r} min`; };
+const curto = (t, n) => { const s = String(t || "").replace(/\s+/g, " ").trim(); return s.length > n ? s.slice(0, n - 1) + "…" : s; };
+const mesmoNome = (a, b) => String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+
+views.cadastros = async () => {
+  if (!admin()) return `<div class="vazio">Só o administrador acessa esta tela.</div>`;
+  const [servicos, motivos, intervalos] = await Promise.all([
+    Api.ler("servicos", { select: "*", order: "nome.asc" }),
+    Api.ler("motivos_parada", { select: "*", order: "ordem.asc,nome.asc" }),
+    Api.ler("intervalos", { select: "*", order: "inicio.asc" })
+  ]);
+  CAD.servicos = servicos; CAD.motivos = motivos; CAD.intervalos = intervalos;
+  const abas = [["servicos", "Serviços e processos", servicos], ["motivos", "Motivos de parada", motivos], ["intervalos", "Horários de intervalo", intervalos]];
+  if (!abas.some(a => a[0] === FCAD.aba)) FCAD.aba = "servicos";
+  const novo = { servicos: ["cad-serv-novo", "Novo serviço"], motivos: ["cad-mot-novo", "Novo motivo"], intervalos: ["cad-int-novo", "Novo intervalo"] }[FCAD.aba];
+  const lista = abas.find(a => a[0] === FCAD.aba)[2];
+  const inativos = lista.filter(x => !x.ativo).length;
+  const corpo = FCAD.aba === "servicos" ? tabelaServicos() : FCAD.aba === "motivos" ? tabelaMotivos() : tabelaIntervalos();
+  return cabecalho("Cadastros de produção", "Base de tudo o que vem depois: os cards nascem de um serviço, as paradas usam os motivos e os intervalos saem do tempo medido. Só o administrador altera; ninguém apaga, só desativa.", `<button type="button" class="primary" data-acao="${novo[0]}">${novo[1]}</button>`) +
+    `<div class="panel ag-barra"><div class="seg" role="group" aria-label="Cadastro">${abas.map(a => `<button type="button" aria-pressed="${FCAD.aba === a[0]}" data-acao="cad-aba" data-valor="${a[0]}">${a[1]} <span class="muted">(${a[2].filter(x => x.ativo).length})</span></button>`).join("")}</div>
+      <label class="inline"><input type="checkbox" data-cd="inativos" ${FCAD.inativos ? "checked" : ""}> Mostrar inativos${inativos ? ` (${inativos})` : ""}</label></div>` + corpo;
+};
+
+function tabelaServicos() {
+  const itens = CAD.servicos.filter(s => FCAD.inativos || s.ativo);
+  if (!itens.length) return `<div class="panel vazio">Nenhum serviço cadastrado ainda. Use <b>Novo serviço</b> para começar: cortar perfil, usinar perfil, emborrachar, montar folha, separação de almoxarifado...</div>`;
+  const linhas = itens.map(s => `<tr${s.ativo ? "" : ` style="opacity:.6"`}>
+    <td><b>${esc(s.nome)}</b>${s.instrucoes ? `<span class="muted" style="display:block;font-size:.85rem">${esc(curto(s.instrucoes, 90))}</span>` : ""}</td>
+    <td>${esc(TIPOS_SERVICO[s.tipo] || s.tipo)}</td>
+    <td class="n">${s.fotos_min ? esc(s.fotos_min) : `<span class="muted">não exige</span>`}${s.fotos_descricao ? `<span class="muted" style="display:block;font-size:.85rem">${esc(curto(s.fotos_descricao, 40))}</span>` : ""}</td>
+    <td class="n">${s.tempo_limite_min ? esc(minTxt(s.tempo_limite_min)) : `<span class="muted">sem limite</span>`}</td>
+    <td>${s.ativo ? "Ativo" : "Inativo"}</td>
+    <td><button type="button" class="small" data-acao="cad-serv-editar" data-id="${esc(s.id)}">Editar</button></td></tr>`).join("");
+  return `<div class="panel tabela"><table><thead><tr><th>Serviço</th><th>Tipo</th><th class="n">Fotos exigidas</th><th class="n">Tempo limite</th><th>Situação</th><th></th></tr></thead><tbody>${linhas}</tbody></table>
+    <p class="muted" style="margin:.75rem 0 0">O tempo limite é o que dispara o alerta de card aberto demais. Serviço sem limite fica com o alerta desligado.</p></div>`;
+}
+function tabelaMotivos() {
+  const itens = CAD.motivos.filter(m => FCAD.inativos || m.ativo);
+  const linhas = itens.map(m => `<tr${m.ativo ? "" : ` style="opacity:.6"`}>
+    <td><input type="text" value="${esc(m.nome)}" data-cd="mot-nome" data-id="${esc(m.id)}" aria-label="Nome do motivo" style="min-width:220px"></td>
+    <td><input type="number" value="${esc(m.ordem)}" data-cd="mot-ordem" data-id="${esc(m.id)}" aria-label="Posição de ${esc(m.nome)} na lista" style="width:90px"></td>
+    <td><label class="inline"><input type="checkbox" data-cd="mot-ativo" data-id="${esc(m.id)}" ${m.ativo ? "checked" : ""}> Ativo</label></td></tr>`).join("");
+  return `<div class="panel tabela">${linhas ? `<table><thead><tr><th>Motivo</th><th>Posição na lista</th><th>Situação</th></tr></thead><tbody>${linhas}</tbody></table>` : `<div class="vazio">Nenhum motivo cadastrado.</div>`}
+    <p class="muted" style="margin:.75rem 0 0">Para pausar um card, o funcionário é obrigado a escolher um destes motivos. A lista cresce quando você quiser. Café e almoço também podem entrar em <b>Horários de intervalo</b>, que descontam sozinhos, sem clique.</p></div>`;
+}
+function tabelaIntervalos() {
+  const itens = CAD.intervalos.filter(i => FCAD.inativos || i.ativo);
+  const linhas = itens.map(i => `<tr${i.ativo ? "" : ` style="opacity:.6"`}>
+    <td><input type="text" value="${esc(i.nome)}" data-cd="int-nome" data-id="${esc(i.id)}" aria-label="Nome do intervalo" style="min-width:180px"></td>
+    <td><input type="time" value="${esc(hhmm(i.inicio))}" data-cd="int-inicio" data-id="${esc(i.id)}" aria-label="Início de ${esc(i.nome)}" style="width:130px"></td>
+    <td><input type="time" value="${esc(hhmm(i.fim))}" data-cd="int-fim" data-id="${esc(i.id)}" aria-label="Fim de ${esc(i.nome)}" style="width:130px"></td>
+    <td class="n">${esc(String(duracaoMin(i.inicio, i.fim)))} min</td>
+    <td><label class="inline"><input type="checkbox" data-cd="int-ativo" data-id="${esc(i.id)}" ${i.ativo ? "checked" : ""}> Ativo</label></td></tr>`).join("");
+  return `<div class="panel tabela">${linhas ? `<table><thead><tr><th>Intervalo</th><th>Início</th><th>Fim</th><th class="n">Duração</th><th>Situação</th></tr></thead><tbody>${linhas}</tbody></table>` : `<div class="vazio">Nenhum intervalo cadastrado. Use <b>Novo intervalo</b> para o café e o almoço, por exemplo.</div>`}
+    <p class="muted" style="margin:.75rem 0 0">Estes horários são descontados sozinhos do tempo de produção, todos os dias. Dois intervalos ativos não podem se sobrepor.</p></div>`;
+}
+const paraMin = t => { const [h, m] = String(t).slice(0, 5).split(":").map(Number); return h * 60 + m; };
+const duracaoMin = (a, b) => paraMin(b) - paraMin(a);
+function conflitoIntervalo(ini, fim, ignorarId) {
+  const o = CAD.intervalos.find(x => x.ativo && x.id !== ignorarId && paraMin(ini) < paraMin(x.fim) && paraMin(x.inicio) < paraMin(fim));
+  return o ? `Este horário se sobrepõe a "${o.nome}" (${hhmm(o.inicio)} a ${hhmm(o.fim)}).` : "";
+}
+
+/* ---- serviços ---- */
+function abrirServico(id) {
+  const s = id ? CAD.servicos.find(x => x.id === id) : null;
+  if (id && !s) return;
+  const v = s || { nome: "", tipo: "fabricacao", instrucoes: "", fotos_min: 0, fotos_descricao: "", tempo_limite_min: null, ativo: true };
+  abrir(`<form id="f-serv" novalidate><div class="barra-cartao"><h2>${s ? "Editar serviço" : "Novo serviço"}</h2><div class="acoes"><button type="button" data-acao="fechar">Cancelar</button><button type="submit" class="primary">Salvar</button></div></div>
+    <div class="field"><label for="sv-nome">Nome do serviço *</label><input id="sv-nome" type="text" value="${esc(v.nome)}" placeholder="Ex.: Cortar perfil"></div>
+    <div class="field"><label for="sv-tipo">Tipo *</label><select id="sv-tipo">${Object.entries(TIPOS_SERVICO).map(([k, r]) => opt(k, r, v.tipo)).join("")}</select><div class="muted" id="sv-dica" style="font-size:.85rem;margin-top:.2rem">${esc(DICA_TIPO[v.tipo])}</div></div>
+    <div class="field"><label for="sv-instr">Instruções padrão</label><textarea id="sv-instr" rows="3" placeholder="Ex.: lubrificar a máquina antes de começar">${esc(v.instrucoes || "")}</textarea></div>
+    <div class="grade2">
+      <div class="field"><label for="sv-fotos">Fotos exigidas na finalização</label><input id="sv-fotos" type="number" min="0" max="10" step="1" value="${esc(v.fotos_min)}"><div class="muted" style="font-size:.85rem;margin-top:.2rem" id="sv-fotos-dica">0 = não exige foto.</div></div>
+      <div class="field"><label for="sv-fotos-desc">Quais fotos</label><input id="sv-fotos-desc" type="text" value="${esc(v.fotos_descricao || "")}" placeholder="Ex.: antes e depois"></div></div>
+    <div class="field"><label for="sv-limite">Tempo limite do card aberto (minutos)</label><input id="sv-limite" type="number" min="1" max="10080" step="1" value="${esc(v.tempo_limite_min ?? "")}" placeholder="Em branco = sem limite"><div class="muted" style="font-size:.85rem;margin-top:.2rem">Passou desse tempo, os gestores recebem o alerta. Em branco, o alerta fica desligado para este serviço.</div></div>
+    ${s ? `<div class="field"><label class="inline"><input type="checkbox" id="sv-ativo" ${s.ativo ? "checked" : ""}> Ativo</label><div class="muted" style="font-size:.85rem;margin-top:.2rem">Inativo some das listas de novos cards. O que já foi feito continua guardado.</div></div>` : ""}
+    <div class="erro-campo" id="e-serv" role="alert"></div></form>`);
+  const ajustar = () => {
+    const t = $("#sv-tipo").value;
+    $("#sv-dica").textContent = DICA_TIPO[t];
+    $("#sv-fotos").min = t === "campo" ? "1" : "0";
+    $("#sv-fotos-dica").textContent = t === "campo" ? "Serviço de campo exige no mínimo 1 foto." : "0 = não exige foto.";
+    if (t === "campo" && Number($("#sv-fotos").value) < 1) $("#sv-fotos").value = "1";
+  };
+  $("#sv-tipo").onchange = ajustar; ajustar();
+  if (!s) $("#sv-nome").focus();
+  $("#f-serv").onsubmit = ev => { ev.preventDefault(); salvarServico(id); };
+}
+async function salvarServico(id) {
+  const erroEl = $("#e-serv"), nome = $("#sv-nome").value.trim(), tipo = $("#sv-tipo").value;
+  const fotosTxt = $("#sv-fotos").value.trim(), limTxt = $("#sv-limite").value.trim();
+  const fotos = fotosTxt === "" ? 0 : Number(fotosTxt), lim = limTxt === "" ? null : Number(limTxt);
+  if (nome.length < 2) { erroEl.textContent = "Escreva o nome do serviço."; return; }
+  if (CAD.servicos.some(x => x.id !== id && mesmoNome(x.nome, nome))) { erroEl.textContent = "Já existe um serviço com esse nome."; return; }
+  if (!Number.isInteger(fotos) || fotos < 0 || fotos > 10) { erroEl.textContent = "Fotos exigidas: digite um número de 0 a 10."; return; }
+  if (tipo === "campo" && fotos < 1) { erroEl.textContent = "Serviço de campo exige no mínimo 1 foto."; return; }
+  if (lim !== null && (!Number.isInteger(lim) || lim < 1 || lim > 10080)) { erroEl.textContent = "Tempo limite: digite os minutos (de 1 a 10080) ou deixe em branco."; return; }
+  const corpo = { nome, tipo, instrucoes: $("#sv-instr").value.trim() || null, fotos_min: fotos, fotos_descricao: $("#sv-fotos-desc").value.trim() || null, tempo_limite_min: lim };
+  if (id) corpo.ativo = $("#sv-ativo").checked;
+  const b = $('#f-serv button[type="submit"]'); b.disabled = true; erroEl.textContent = "";
+  try {
+    if (id) { const r = await Api.alterar("servicos", { id: "eq." + id }, corpo); if (!r.length) throw new Error("Não foi possível salvar."); }
+    else await Api.inserir("servicos", corpo, null, "return=minimal");
+    fechar(); aviso(id ? "Serviço atualizado." : "Serviço criado."); render();
+  } catch (e) { erroEl.textContent = e.message; b.disabled = false; }
+}
+
+/* ---- motivos de parada ---- */
+async function novoMotivo() {
+  const nome = await pedirTexto("Novo motivo de parada", "Nome do motivo (ex.: Falta de material)", "Adicionar");
+  if (nome === null) return;
+  const n = nome.trim();
+  if (n.length < 2) { aviso("Escreva o nome do motivo.", "erro"); return; }
+  if (CAD.motivos.some(m => mesmoNome(m.nome, n))) { aviso("Já existe um motivo com esse nome.", "erro"); return; }
+  const ordem = CAD.motivos.reduce((m, x) => Math.max(m, x.ordem || 0), 0) + 10;
+  try { await Api.inserir("motivos_parada", { nome: n, ordem }, null, "return=minimal"); aviso("Motivo adicionado."); render(); } catch (e) { erro(e); }
+}
+
+/* ---- intervalos ---- */
+function abrirIntervalo() {
+  abrir2(`<form id="f-int" novalidate><h2>Novo intervalo</h2>
+    <div class="field"><label for="in-nome">Nome *</label><input id="in-nome" type="text" placeholder="Ex.: Café da manhã"></div>
+    <div class="grade2"><div class="field"><label for="in-ini">Início *</label><input id="in-ini" type="time"></div><div class="field"><label for="in-fim">Fim *</label><input id="in-fim" type="time"></div></div>
+    <div class="erro-campo" id="e-int" role="alert"></div>
+    <div class="rodape-dialogo"><button type="button" id="in-cancelar">Cancelar</button><button type="submit" class="primary">Adicionar</button></div></form>`);
+  $("#in-nome").focus();
+  $("#in-cancelar").onclick = fechar2;
+  $("#f-int").onsubmit = async ev => {
+    ev.preventDefault();
+    const nome = $("#in-nome").value.trim(), ini = $("#in-ini").value, fim = $("#in-fim").value, erroEl = $("#e-int");
+    if (nome.length < 2) { erroEl.textContent = "Escreva o nome do intervalo."; return; }
+    if (CAD.intervalos.some(x => mesmoNome(x.nome, nome))) { erroEl.textContent = "Já existe um intervalo com esse nome."; return; }
+    if (!ini || !fim) { erroEl.textContent = "Informe o início e o fim."; return; }
+    if (paraMin(fim) <= paraMin(ini)) { erroEl.textContent = "O fim precisa ser depois do início."; return; }
+    const c = conflitoIntervalo(ini, fim, null); if (c) { erroEl.textContent = c; return; }
+    const b = $('#f-int button[type="submit"]'); b.disabled = true;
+    try { await Api.inserir("intervalos", { nome, inicio: ini, fim }, null, "return=minimal"); fechar2(); aviso("Intervalo adicionado."); render(); }
+    catch (e) { erroEl.textContent = e.message; b.disabled = false; }
+  };
+}
+
+/* ---- edição direta nas tabelas de motivos e intervalos ---- */
+async function salvarCadastro(tabela, lista, id, campo, valor) {
+  const r = await Api.alterar(tabela, { id: "eq." + id }, { [campo]: valor });
+  if (!r.length) throw new Error("Não foi possível salvar.");
+  const i = lista.findIndex(x => x.id === id); if (i >= 0) lista[i] = r[0];
+  return r[0];
+}
+document.addEventListener("click", ev => {
+  const el = ev.target.closest('[data-acao^="cad-"]'); if (!el) return;
+  const a = el.dataset.acao, id = el.dataset.id;
+  if (a === "cad-aba") { FCAD.aba = el.dataset.valor; salvarCad(); render(); }
+  else if (a === "cad-serv-novo") abrirServico(null);
+  else if (a === "cad-serv-editar") abrirServico(id);
+  else if (a === "cad-mot-novo") novoMotivo();
+  else if (a === "cad-int-novo") abrirIntervalo();
+});
+document.addEventListener("change", async ev => {
+  const t = ev.target, cd = t.dataset && t.dataset.cd; if (!cd) return;
+  if (cd === "inativos") { FCAD.inativos = t.checked; salvarCad(); render(); return; }
+  const id = t.dataset.id;
+  try {
+    if (cd.startsWith("mot-")) {
+      const m = CAD.motivos.find(x => x.id === id); if (!m) return;
+      if (cd === "mot-nome") {
+        const n = t.value.trim();
+        if (n.length < 2) { aviso("O nome do motivo não pode ficar vazio.", "erro"); render(); return; }
+        if (CAD.motivos.some(x => x.id !== id && mesmoNome(x.nome, n))) { aviso("Já existe um motivo com esse nome.", "erro"); render(); return; }
+        if (n === m.nome) return;
+        await salvarCadastro("motivos_parada", CAD.motivos, id, "nome", n); aviso("Motivo atualizado.");
+      } else if (cd === "mot-ordem") {
+        const o = parseInt(t.value, 10);
+        if (Number.isNaN(o)) { aviso("Digite um número para a posição.", "erro"); render(); return; }
+        if (o === m.ordem) return;
+        await salvarCadastro("motivos_parada", CAD.motivos, id, "ordem", o); aviso("Posição atualizada."); render();
+      } else if (cd === "mot-ativo") {
+        if (!t.checked && !(await confirmar(`Desativar "${m.nome}"? Ele deixa de aparecer na lista de pausas. O que já foi registrado continua guardado.`, "Desativar"))) { render(); return; }
+        await salvarCadastro("motivos_parada", CAD.motivos, id, "ativo", t.checked); aviso("Motivo atualizado."); render();
+      }
+    } else if (cd.startsWith("int-")) {
+      const i = CAD.intervalos.find(x => x.id === id); if (!i) return;
+      if (cd === "int-nome") {
+        const n = t.value.trim();
+        if (n.length < 2) { aviso("O nome do intervalo não pode ficar vazio.", "erro"); render(); return; }
+        if (CAD.intervalos.some(x => x.id !== id && mesmoNome(x.nome, n))) { aviso("Já existe um intervalo com esse nome.", "erro"); render(); return; }
+        if (n === i.nome) return;
+        await salvarCadastro("intervalos", CAD.intervalos, id, "nome", n); aviso("Intervalo atualizado.");
+      } else if (cd === "int-inicio" || cd === "int-fim") {
+        const ini = cd === "int-inicio" ? t.value : hhmm(i.inicio), fim = cd === "int-fim" ? t.value : hhmm(i.fim);
+        if (!ini || !fim) { aviso("Informe o horário.", "erro"); render(); return; }
+        if (paraMin(fim) <= paraMin(ini)) { aviso("O fim precisa ser depois do início.", "erro"); render(); return; }
+        const c = i.ativo ? conflitoIntervalo(ini, fim, id) : ""; if (c) { aviso(c, "erro"); render(); return; }
+        await salvarCadastro("intervalos", CAD.intervalos, id, cd === "int-inicio" ? "inicio" : "fim", t.value); aviso("Intervalo atualizado."); render();
+      } else if (cd === "int-ativo") {
+        if (t.checked) { const c = conflitoIntervalo(hhmm(i.inicio), hhmm(i.fim), id); if (c) { aviso(c, "erro"); render(); return; } }
+        else if (!(await confirmar(`Desativar "${i.nome}"? Esse horário volta a contar como tempo de produção.`, "Desativar"))) { render(); return; }
+        await salvarCadastro("intervalos", CAD.intervalos, id, "ativo", t.checked); aviso("Intervalo atualizado."); render();
+      }
+    }
+  } catch (e) { erro(e); render(); }
+});
 
 /* ===================== INSTALAÇÃO NO CELULAR (PWA) ===================== */
 let promptInstalar = null;
