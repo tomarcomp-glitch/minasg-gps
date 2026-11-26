@@ -180,6 +180,15 @@ body.arrastando-cartao{overscroll-behavior:none}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 @media print{.side,button,#avisos,.filtros{display:none!important}.app{display:block}body{background:#fff;color:#000}}
+.vd-itens{list-style:none;margin:0;padding:0}
+.vd-itens li{display:flex;gap:.6rem;align-items:flex-start;padding:.45rem .2rem;border-bottom:1px solid var(--line)}
+.vd-itens li.vd-editando{background:var(--accent-soft)}
+.vd-bts{display:flex;gap:.25rem;flex-wrap:wrap;justify-content:flex-end}
+.vd-escolhido{display:flex;gap:.6rem;align-items:center;padding:.35rem .5rem;border:1px solid var(--accent);border-radius:var(--radius);background:var(--accent-soft)}
+.vd-res{max-height:300px;overflow:auto;margin-top:.35rem}
+.vd-op{display:flex;gap:.6rem;align-items:center;width:100%;text-align:left;margin-bottom:.3rem;padding:.3rem .5rem}
+#vd-editor{background:var(--bg);border:1px solid var(--line);border-radius:var(--radius);padding:.75rem}
+@media (max-width:820px){.vd-itens li{flex-wrap:wrap}.vd-bts{width:100%;justify-content:flex-start}}
 </style>
 </head>
 <body>
@@ -306,6 +315,7 @@ const Api = (() => {
     if (/(column|schema cache)/i.test(m) && /(hora_prevista|hora_fim|campos|usa_financeiro|ordem|ativo)/i.test(m)) return "O banco ainda não recebeu a atualização 1. Rode o arquivo kanban_atualizacao_1.sql no Supabase.";
     if (/(servicos|motivos_parada|intervalos)/i.test(m) && /(schema cache|does not exist|relation|table)/i.test(m)) return "O banco ainda não recebeu a atualização 6. Rode o arquivo kanban_atualizacao_6.sql no Supabase.";
     if (/(produtos|produto_processos|salvar_produto)/i.test(m) && /(schema cache|does not exist|relation|table|function)/i.test(m)) return "O banco ainda não recebeu a atualização 7. Rode o arquivo kanban_atualizacao_7.sql no Supabase.";
+    if (/(vendas|venda_itens|venda_cartoes|salvar_venda|mudar_fase_venda|vendas_andamento)/i.test(m) && /(schema cache|does not exist|relation|Could not find)/i.test(m)) return "O banco ainda não recebeu a atualização 12. Rode o arquivo kanban_atualizacao_12.sql no Supabase.";
     if (/duplicate key/i.test(m)) return "Já existe um registro igual.";
     if (/JWT expired|invalid JWT/i.test(m)) return "Sessão expirada. Entre de novo.";
     return m;
@@ -1607,6 +1617,7 @@ function montarShell() {
     <a href="#/painel" data-rota="painel">Demandas do dia</a>
     <a href="#/kanban" data-rota="kanban">Kanban</a>
     <a href="#/agenda" data-rota="agenda">Agenda</a>
+    ${podeVerVendas() ? `<a href="#/vendas" data-rota="vendas">Vendas</a>` : ""}
     <a href="#/conferir" data-rota="conferir">Conferir importados</a>
     ${a ? `<div class="side-grupo">Administração</div><a href="#/lixeira" data-rota="lixeira">Lixeira</a><a href="#/usuarios" data-rota="usuarios">Usuários</a><a href="#/areas" data-rota="areas">Áreas e campos</a><a href="#/cadastros" data-rota="cadastros">Cadastros de produção</a><a href="#/importar" data-rota="importar">Importar do Trello</a><a href="#/backup" data-rota="backup">Backup</a>` : ""}
     <div class="side-fim"><span class="muted">${esc(S.verComo ? S.verComo.nome : S.eu.nome)}</span>${instalado ? "" : `<button type="button" class="small" data-acao="instalar">Instalar no celular</button>`}<button type="button" class="small" data-acao="senha">Trocar senha</button><button type="button" class="small" data-acao="sair">Sair</button></div>
@@ -2369,6 +2380,344 @@ document.addEventListener("change", async ev => {
     }
   } catch (e) { erro(e); render(); }
 });
+
+/* ===================== VENDAS: ORÇAMENTO, PEDIDO E ENTREGA ===================== */
+const FASES_VENDA = { orcamento: "Orçamento", cancelado: "Cancelado", pedido: "Pedido", a_entregar: "A entregar", entregando: "Entregando", entregue: "Entregue" };
+const ETAPAS_ENTREGA = ["a_entregar", "entregando", "entregue"];
+const FVD = { aba: "orcamentos", entrega: "a_entregar", todos: false, busca: "", ...pref.ler("vendas", {}) };
+FVD.busca = "";
+const salvarFvd = () => pref.gravar("vendas", { aba: FVD.aba, entrega: FVD.entrega, todos: FVD.todos });
+const VD = { vendas: [], itens: [], and: [], semSql: false, produtos: null, desenhos: null, carregadoEm: 0, cache: false };
+const areaVendas = () => S.todosQuadros.find(q => q.chave === "vendas") || S.quadros.find(q => q.chave === "vendas");
+const podeVerVendas = () => admin() || S.quadros.some(q => q.chave === "vendas");
+const podeEditarVendas = () => { const a = areaVendas(); return admin() || (!!a && podeEditar(a.id)); };
+const itensDaVenda = id => VD.itens.filter(i => i.venda_id === id).sort((a, b) => a.ordem - b.ordem);
+const cardsDaVenda = (id, papel) => VD.and.filter(a => a.venda_id === id && a.papel === papel);
+const numVenda = v => v.numero_pedido ? `Pedido ${v.numero_pedido}` : `Orçamento ${v.numero_orcamento}`;
+const vdNum = t => String(t ?? "").trim();
+const prodTxt = i => (i.linha ? i.linha + " · " : "") + i.produto_nome;
+const medidasTxt = i => [`${i.quantidade} un.`, (i.largura || i.altura) ? `L ${i.largura ?? "?"} × A ${i.altura ?? "?"} mm` : "", i.vidro ? "Vidro: " + i.vidro : "", i.cor ? "Cor: " + i.cor : ""].filter(Boolean).join(" · ");
+const desenhoVd = id => id && VD.desenhos ? VD.desenhos.find(d => d.id === id) : null;
+const thumbVd = produtoId => { const p = VD.produtos && VD.produtos.find(x => x.id === produtoId); const d = p && desenhoVd(p.desenho_id); return d ? imgDesenho(d, THUMB) : `<div class="muted" style="${THUMB};display:flex;align-items:center;justify-content:center">—</div>`; };
+const msgVenda = e => /Could not find the function|salvar_venda|mudar_fase_venda/.test(e.message) && !/permissão|Item \d/.test(e.message) ? "O banco ainda não recebeu a atualização 12. Rode o arquivo kanban_atualizacao_12.sql no Supabase." : e.message;
+
+async function carregarVendas() {
+  try {
+    const [v, i, a] = await Promise.all([
+      Api.listar("vendas", { select: "*", order: "criado_em.desc,id.asc" }),
+      Api.listar("venda_itens", { select: "*", order: "venda_id.asc,ordem.asc" }),
+      Api.rpc("vendas_andamento")
+    ]);
+    VD.vendas = v; VD.itens = i; VD.and = a || []; VD.semSql = false;
+  } catch (e) {
+    if (!/atualização 12/.test(e.message)) throw e;
+    VD.semSql = true; VD.vendas = []; VD.itens = []; VD.and = [];
+  }
+  VD.carregadoEm = Date.now();
+}
+async function carregarProdutosVendas() {
+  if (VD.produtos) return;
+  const [p, d] = await Promise.all([
+    Api.ler("produtos", { select: "id,nome,linha,descricao,ativo,desenho_id", order: "linha.asc,nome.asc" }).catch(() => Api.ler("produtos", { select: "id,nome,linha,descricao,ativo", order: "nome.asc" })),
+    Api.ler("desenhos", { select: "id,nome,svg" }).catch(() => [])
+  ]);
+  VD.produtos = p; VD.desenhos = d;
+}
+const assinaturaVendas = () => VD.vendas.map(v => v.id + ":" + v.versao + ":" + v.fase).join(",") + "#" + VD.itens.length + "#" + VD.and.map(a => a.cartao_id + ":" + a.status + ":" + a.excluido + ":" + a.atualizado_em).join(",");
+
+function casaBusca(v) {
+  const termos = norm(FVD.busca).split(/\s+/).filter(Boolean);
+  if (!termos.length) return true;
+  const alvo = norm([v.numero_orcamento ? "orcamento " + v.numero_orcamento : "", v.numero_pedido ? "pedido " + v.numero_pedido : "", v.cliente, v.contato, v.endereco, ...itensDaVenda(v.id).map(prodTxt)].join(" "));
+  return termos.every(t => alvo.includes(t));
+}
+function andamentoTxt(v) {
+  const cs = cardsDaVenda(v.id, "producao").filter(c => !c.excluido);
+  if (!cs.length) return `<span class="muted">sem card</span>`;
+  if (cs.length === 1) { const c = cs[0]; return `<span class="tag${c.status === "concluido" ? " t-receber" : c.status === "em_andamento" ? " t-alerta" : ""}">${esc(STATUS[c.status] || c.status)}</span><span class="muted" style="display:block;font-size:.85rem">${esc(c.area)}${c.arquivado ? " · arquivado" : ""}</span>`; }
+  const ok = cs.filter(c => c.status === "concluido").length;
+  return `<b>${ok}</b> de ${cs.length} cards concluídos`;
+}
+const resumoItens = v => { const its = itensDaVenda(v.id); return `<b>${its.length}</b> ${its.length === 1 ? "item" : "itens"}<span class="muted" style="display:block;font-size:.85rem">${esc(curto(its.map(i => i.produto_nome + (i.quantidade > 1 ? " ×" + i.quantidade : "")).join("; "), 80))}</span>`; };
+const clienteCel = v => `<b>${esc(v.cliente)}</b>${v.contato ? `<span class="muted" style="display:block;font-size:.85rem">${esc(v.contato)}</span>` : ""}${v.endereco ? `<span class="muted" style="display:block;font-size:.85rem">${esc(curto(v.endereco, 70))}</span>` : ""}`;
+const quemQuando = (em, por) => em ? `${esc(horaBR(em))}${por ? `<span class="muted" style="display:block;font-size:.85rem">${esc(String(nomeDe(por)).split(" ")[0])}</span>` : ""}` : `<span class="muted">—</span>`;
+
+views.vendas = async () => {
+  if (!podeVerVendas()) return `<div class="vazio">Você não tem acesso a Vendas. O administrador libera em Usuários › Acessos, na área <b>Vendas</b>.</div>`;
+  if (VD.cache) VD.cache = false; else await carregarVendas();
+  const sub = "Orçamento vira pedido; o pedido manda um card com todos os itens para o Gestor de Processos e Serviços. Quando os cards do pedido são concluídos, ele vai sozinho para a Entrega. Ao marcar Entregue, o Financeiro recebe um card para criar as cobranças.";
+  if (VD.semSql) return cabecalho("Vendas", sub) + `<div class="panel vazio">O banco ainda não recebeu a atualização 12. Rode o arquivo <b>kanban_atualizacao_12.sql</b> no Supabase (SQL Editor) e recarregue esta tela.</div>`;
+  const ed = podeEditarVendas();
+  const n = { orcamentos: VD.vendas.filter(v => v.fase === "orcamento").length, pedidos: VD.vendas.filter(v => v.fase === "pedido").length, entrega: VD.vendas.filter(v => v.fase === "a_entregar" || v.fase === "entregando").length };
+  if (!["orcamentos", "pedidos", "entrega"].includes(FVD.aba)) FVD.aba = "orcamentos";
+  const novo = !ed ? "" : FVD.aba === "orcamentos" ? `<button type="button" class="primary" data-acao="vd-novo" data-fase="orcamento">Novo orçamento</button>` : FVD.aba === "pedidos" ? `<button type="button" class="primary" data-acao="vd-novo" data-fase="pedido">Novo pedido</button>` : "";
+  const abas = [["orcamentos", "Orçamentos"], ["pedidos", "Pedidos"], ["entrega", "Entrega"]];
+  const barra = `<div class="panel ag-barra"><div class="seg" role="group" aria-label="Etapa">${abas.map(a => `<button type="button" aria-pressed="${FVD.aba === a[0]}" data-acao="vd-aba" data-valor="${a[0]}">${a[1]} <span class="muted">(${n[a[0]]})</span></button>`).join("")}</div>
+    <input id="vd-busca" type="search" data-vd="busca" value="${esc(FVD.busca)}" placeholder="Buscar nº, cliente, obra ou produto…" aria-label="Buscar nº, cliente, obra ou produto" autocomplete="off" style="flex:1;min-width:200px;max-width:360px">
+    ${FVD.aba === "orcamentos" ? `<label class="inline"><input type="checkbox" data-vd="todos" ${FVD.todos ? "checked" : ""}> Mostrar cancelados e os que viraram pedido</label>` : ""}</div>`;
+  const corpo = FVD.aba === "orcamentos" ? tabelaOrcamentos(ed) : FVD.aba === "pedidos" ? tabelaPedidos() : tabelaEntrega(ed);
+  return cabecalho("Vendas", sub, `<button type="button" data-acao="vd-atualizar">Atualizar</button>${novo}`) + (ed ? "" : `<div class="banner"><span>Você só tem leitura em Vendas.</span></div>`) + barra + corpo;
+};
+
+function tabelaOrcamentos(ed) {
+  const fases = FVD.todos ? ["orcamento", "cancelado", "pedido", "a_entregar", "entregando", "entregue"] : ["orcamento"];
+  const lista = VD.vendas.filter(v => v.numero_orcamento && fases.includes(v.fase) && casaBusca(v)).sort((a, b) => b.numero_orcamento - a.numero_orcamento);
+  if (!lista.length) return `<div class="panel vazio">${FVD.busca.trim() ? "Nada encontrado nesta busca." : `Nenhum orçamento em aberto.${ed ? " Use <b>Novo orçamento</b>." : ""}`}</div>`;
+  const linhas = lista.map(v => `<tr${v.fase === "cancelado" ? ` style="opacity:.6"` : ""}>
+    <td class="n"><b>${esc(v.numero_orcamento)}</b></td><td>${clienteCel(v)}</td><td>${resumoItens(v)}</td><td>${quemQuando(v.criado_em, v.criado_por)}</td>
+    <td>${v.fase === "orcamento" ? `<span class="tag">Em aberto</span>` : v.fase === "cancelado" ? `<span class="tag t-perigo">Cancelado</span>` : `<span class="tag t-receber">Virou pedido ${esc(v.numero_pedido)}</span>`}</td>
+    <td style="white-space:nowrap"><button type="button" class="small" data-acao="vd-abrir" data-id="${esc(v.id)}">Abrir</button>${ed && v.fase === "orcamento" ? ` <button type="button" class="small primary" data-acao="vd-transformar" data-id="${esc(v.id)}">Transformar em Pedido</button>` : ""}</td></tr>`).join("");
+  return `<div class="panel tabela"><table><thead><tr><th class="n">Nº</th><th>Cliente</th><th>Itens</th><th>Criado</th><th>Situação</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`;
+}
+function tabelaPedidos() {
+  const lista = VD.vendas.filter(v => v.fase === "pedido" && casaBusca(v)).sort((a, b) => b.numero_pedido - a.numero_pedido);
+  if (!lista.length) return `<div class="panel vazio">${FVD.busca.trim() ? "Nada encontrado nesta busca." : "Nenhum pedido em produção."}</div>`;
+  const linhas = lista.map(v => {
+    const c = cardsDaVenda(v.id, "producao").find(x => !x.excluido && S.quadros.some(q => q.nome === x.area));
+    return `<tr><td class="n"><b>${esc(v.numero_pedido)}</b>${v.numero_orcamento ? `<span class="muted" style="display:block;font-size:.8rem">orç. ${esc(v.numero_orcamento)}</span>` : ""}</td><td>${clienteCel(v)}</td><td>${resumoItens(v)}</td><td>${andamentoTxt(v)}</td><td>${quemQuando(v.pedido_em, v.pedido_por)}</td>
+      <td style="white-space:nowrap"><button type="button" class="small" data-acao="vd-abrir" data-id="${esc(v.id)}">Abrir</button>${c ? ` <button type="button" class="small" data-acao="vd-card" data-id="${esc(c.cartao_id)}">Ver card</button>` : ""}</td></tr>`;
+  }).join("");
+  return `<div class="panel tabela"><table><thead><tr><th class="n">Pedido</th><th>Cliente</th><th>Itens</th><th>Andamento</th><th>Criado</th><th></th></tr></thead><tbody>${linhas}</tbody></table>
+    <p class="muted" style="margin:.75rem 0 0">Quando todos os cards de produção do pedido estiverem Concluídos, ele passa sozinho para a Entrega (A entregar).</p></div>`;
+}
+function tabelaEntrega(ed) {
+  if (!ETAPAS_ENTREGA.includes(FVD.entrega)) FVD.entrega = "a_entregar";
+  const cont = s => VD.vendas.filter(v => v.fase === s).length;
+  const seg = `<div class="seg" role="group" aria-label="Situação da entrega" style="margin-bottom:.75rem">${ETAPAS_ENTREGA.map(s => `<button type="button" aria-pressed="${FVD.entrega === s}" data-acao="vd-entrega" data-valor="${s}">${FASES_VENDA[s]} <span class="muted">(${cont(s)})</span></button>`).join("")}</div>`;
+  const ord = { a_entregar: "pronto_em", entregando: "saiu_em", entregue: "entregue_em" }[FVD.entrega];
+  const lista = VD.vendas.filter(v => v.fase === FVD.entrega && casaBusca(v)).sort((a, b) => FVD.entrega === "entregue" ? String(b[ord] || "").localeCompare(String(a[ord] || "")) : String(a[ord] || "").localeCompare(String(b[ord] || "")));
+  if (!lista.length) return seg + `<div class="panel vazio">${FVD.busca.trim() ? "Nada encontrado nesta busca." : `Nenhum pedido em ${FASES_VENDA[FVD.entrega]}.`}</div>`;
+  const quando = { a_entregar: ["Pronto desde", v => quemQuando(v.pronto_em)], entregando: ["Saiu em", v => quemQuando(v.saiu_em, v.saiu_por)], entregue: ["Entregue em", v => quemQuando(v.entregue_em, v.entregue_por)] }[FVD.entrega];
+  const acoes = v => {
+    if (!ed) return "";
+    if (v.fase === "a_entregar") return ` <button type="button" class="small primary" data-acao="vd-fase" data-fase="entregando" data-id="${esc(v.id)}">Saiu para entrega</button>`;
+    if (v.fase === "entregando") return ` <button type="button" class="small primary" data-acao="vd-fase" data-fase="entregue" data-id="${esc(v.id)}">Marcar como entregue</button> <button type="button" class="small" data-acao="vd-fase" data-fase="a_entregar" data-id="${esc(v.id)}">Voltar para A entregar</button>`;
+    return "";
+  };
+  const fin = v => { const c = cardsDaVenda(v.id, "financeiro")[0]; return c ? `<span class="tag${c.status === "concluido" ? " t-receber" : ""}">${esc(STATUS[c.status] || c.status)}</span><span class="muted" style="display:block;font-size:.85rem">${esc(c.area)}${c.excluido ? " · na lixeira" : ""}</span>` : `<span class="muted">—</span>`; };
+  const linhas = lista.map(v => `<tr><td class="n"><b>${esc(v.numero_pedido)}</b></td><td>${clienteCel(v)}</td><td>${resumoItens(v)}</td><td>${quando[1](v)}</td>${FVD.entrega === "entregue" ? `<td>${fin(v)}</td>` : ""}
+    <td style="white-space:nowrap"><button type="button" class="small" data-acao="vd-abrir" data-id="${esc(v.id)}">Abrir</button>${acoes(v)}</td></tr>`).join("");
+  return seg + `<div class="panel tabela"><table><thead><tr><th class="n">Pedido</th><th>Cliente e obra</th><th>Itens</th><th>${quando[0]}</th>${FVD.entrega === "entregue" ? "<th>Card de cobrança</th>" : ""}<th></th></tr></thead><tbody>${linhas}</tbody></table>
+    ${FVD.entrega === "entregando" ? `<p class="muted" style="margin:.75rem 0 0">Ao marcar como entregue, o Financeiro recebe um card para criar as cobranças do pedido.</p>` : ""}</div>`;
+}
+
+/* ---- formulário do orçamento / pedido ---- */
+let VE = null;
+const ITEM_VAZIO = { produto_id: null, produto_nome: "", linha: "", quantidade: 1, largura: "", altura: "", vidro: "", cor: "", observacao: "" };
+async function abrirVenda(id, faseNova) {
+  try { await carregarProdutosVendas(); } catch (e) { erro(e); return; }
+  const v = id ? VD.vendas.find(x => x.id === id) : null;
+  if (id && !v) { aviso("Registro não encontrado. Clique em Atualizar.", "erro"); return; }
+  const fase = v ? v.fase : faseNova;
+  VE = { id: v ? v.id : null, fase, versao: v ? v.versao : null, itens: v ? itensDaVenda(v.id).map(i => ({ ...ITEM_VAZIO, ...i, vidro: i.vidro || "", cor: i.cor || "", observacao: i.observacao || "" })) : [], ed: null, novo: { ...ITEM_VAZIO }, sujo: false, leitura: !podeEditarVendas() || !["orcamento", "pedido"].includes(fase), busca: "" };
+  desenharVenda(v);
+}
+function tituloVenda(v) {
+  if (!v) return VE.fase === "pedido" ? "Novo pedido" : "Novo orçamento";
+  return v.numero_pedido ? `Pedido nº ${v.numero_pedido}` : `Orçamento nº ${v.numero_orcamento}`;
+}
+function desenharVenda(v) {
+  v = v || (VE.id ? VD.vendas.find(x => x.id === VE.id) : null);
+  const ro = VE.leitura, dis = ro ? " disabled" : "";
+  const acoes = [];
+  acoes.push(`<button type="button" data-acao="vd-fechar">${ro || v ? "Fechar" : "Cancelar"}</button>`);
+  if (!ro && v && v.fase === "orcamento") acoes.push(`<button type="button" class="danger" data-acao="vd-cancelar-orc">Cancelar orçamento</button>`);
+  if (podeEditarVendas() && v && v.fase === "cancelado") acoes.push(`<button type="button" data-acao="vd-reabrir">Reabrir orçamento</button>`);
+  if (!ro && v && v.fase === "orcamento") acoes.push(`<button type="button" data-acao="vd-transformar-form">Transformar em Pedido</button>`);
+  if (!ro) acoes.push(`<button type="submit" class="primary">${!v && VE.fase === "pedido" ? "Criar pedido" : "Salvar"}</button>`);
+  const info = v ? `<p class="muted" style="margin:0 0 .75rem;font-size:.9rem"><span class="tag">${esc(FASES_VENDA[v.fase])}</span> ${v.numero_pedido && v.numero_orcamento ? `Veio do orçamento nº ${esc(v.numero_orcamento)}. ` : ""}Criado por ${esc(nomeDe(v.criado_por))} em ${esc(horaBR(v.criado_em))}.${v.numero_pedido ? ` Card: ${andamentoTxt(v).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()}.` : ""}${v.fase === "cancelado" ? " Reabra para alterar." : ["a_entregar", "entregando", "entregue"].includes(v.fase) ? " Pedido na entrega: não pode mais ser alterado." : v.fase === "pedido" && !ro ? " Alterar o pedido atualiza o card do PeS (e deixa um comentário nele)." : ""}</p>` : `<p class="muted" style="margin:0 0 .75rem;font-size:.9rem">${VE.fase === "pedido" ? "Ao criar, um card com todos os itens vai para o Backlog do Gestor de Processos e Serviços." : "O orçamento não gera card. Quando fechar, use Transformar em Pedido."}</p>`;
+  abrir(`<form id="f-venda" novalidate><div class="barra-cartao"><h2>${esc(tituloVenda(v))}</h2><div class="acoes">${acoes.join("")}</div></div>${info}
+    <div class="grade2"><div class="field"><label for="vd-cliente">Cliente *</label><input id="vd-cliente" type="text" maxlength="150" value="${esc(v ? v.cliente : "")}" autocomplete="off"${dis}></div>
+      <div class="field"><label for="vd-contato">Contato</label><input id="vd-contato" type="text" maxlength="150" value="${esc(v ? v.contato || "" : "")}" placeholder="Telefone, WhatsApp, e-mail, nome de quem atende" autocomplete="off"${dis}></div></div>
+    <div class="field"><label for="vd-endereco">Endereço da obra</label><input id="vd-endereco" type="text" maxlength="300" value="${esc(v ? v.endereco || "" : "")}" autocomplete="off"${dis}></div>
+    <div class="bloco"><h3 id="vd-itens-tit">Itens (${VE.itens.length})</h3><div id="vd-itens">${listaItensVenda()}</div></div>
+    ${ro ? "" : `<div class="bloco" id="vd-editor">${editorItemHtml()}</div>`}
+    <div class="erro-campo" id="e-venda" role="alert"></div></form>`, true);
+  $("#f-venda").onsubmit = ev => { ev.preventDefault(); salvarVenda(); };
+  if (!ro) { ["vd-cliente", "vd-contato", "vd-endereco"].forEach(i => $("#" + i).addEventListener("input", () => { VE.sujo = true; })); if (!v) $("#vd-cliente").focus(); }
+}
+function listaItensVenda() {
+  if (!VE.itens.length) return `<div class="vazio" style="padding:1rem">Nenhum item ainda.${VE.leitura ? "" : " Procure o produto abaixo, digite as medidas e clique em Incluir item."}</div>`;
+  return `<ol class="vd-itens">${VE.itens.map((i, k) => {
+    const p = VD.produtos && VD.produtos.find(x => x.id === i.produto_id);
+    return `<li${VE.ed === k ? ` class="vd-editando"` : ""}><span class="n" style="min-width:1.6rem"><b>${k + 1}.</b></span>${thumbVd(i.produto_id)}
+      <span style="flex:1;min-width:0"><b>${esc(prodTxt(i))}</b>${p && !p.ativo ? ` <span class="muted">(inativo no cadastro)</span>` : ""}<span class="muted" style="display:block;font-size:.88rem">${esc(medidasTxt(i))}</span>${i.observacao ? `<span style="display:block;font-size:.88rem;white-space:pre-wrap">Obs.: ${esc(i.observacao)}</span>` : ""}</span>
+      ${VE.leitura ? "" : `<span class="vd-bts"><button type="button" class="small" data-acao="vd-item-sobe" data-i="${k}" aria-label="Subir o item ${k + 1}"${k === 0 ? " disabled" : ""}>↑</button><button type="button" class="small" data-acao="vd-item-desce" data-i="${k}" aria-label="Descer o item ${k + 1}"${k === VE.itens.length - 1 ? " disabled" : ""}>↓</button><button type="button" class="small" data-acao="vd-item-editar" data-i="${k}">Editar</button><button type="button" class="small" data-acao="vd-item-copiar" data-i="${k}" title="Repetir este item para mudar só as medidas">Repetir</button><button type="button" class="small danger" data-acao="vd-item-tirar" data-i="${k}" aria-label="Tirar o item ${k + 1}">Tirar</button></span>`}</li>`;
+  }).join("")}</ol>`;
+}
+const sugestoesVd = campo => [...new Set([...VD.itens.map(i => i[campo]), ...VE.itens.map(i => i[campo])].filter(Boolean).map(s => String(s).trim()))].sort((a, b) => a.localeCompare(b, "pt-BR")).slice(0, 200);
+function editorItemHtml() {
+  const it = VE.novo, editando = VE.ed !== null;
+  const escolhido = it.produto_id ? `<div class="vd-escolhido">${thumbVd(it.produto_id)}<span style="flex:1;min-width:0"><b>${esc(prodTxt(it))}</b></span><button type="button" class="small" data-acao="vd-prod-trocar">Trocar produto</button></div>`
+    : `<input id="vd-busca-prod" type="search" value="${esc(VE.busca)}" placeholder="Digite parte do nome ou da linha (ex.: suprema correr 2 folhas)" autocomplete="off" aria-describedby="vd-res-ajuda"><div id="vd-res" class="vd-res" role="listbox" aria-label="Produtos encontrados">${resultadosProdutos()}</div><div class="muted" id="vd-res-ajuda" style="font-size:.85rem">Só aparecem os produtos ativos do cadastro.</div>`;
+  return `<h3>${editando ? `Editando o item ${VE.ed + 1}` : "Adicionar item"}</h3>
+    <div class="field"><label for="vd-busca-prod">Produto *</label>${escolhido}</div>
+    <div class="grade3"><div class="field"><label for="vd-qtd">Quantidade *</label><input id="vd-qtd" type="number" inputmode="numeric" min="1" max="9999" step="1" value="${esc(it.quantidade)}"></div>
+      <div class="field"><label for="vd-larg">Largura (mm) *</label><input id="vd-larg" type="number" inputmode="numeric" min="1" max="30000" step="1" value="${esc(it.largura ?? "")}" placeholder="Ex.: 1200"></div>
+      <div class="field"><label for="vd-alt">Altura (mm) *</label><input id="vd-alt" type="number" inputmode="numeric" min="1" max="30000" step="1" value="${esc(it.altura ?? "")}" placeholder="Ex.: 1000"></div></div>
+    <div class="grade2"><div class="field"><label for="vd-vidro">Vidro</label><input id="vd-vidro" type="text" maxlength="120" list="vd-vidros" value="${esc(it.vidro)}" autocomplete="off"><datalist id="vd-vidros">${sugestoesVd("vidro").map(s => `<option value="${esc(s)}"></option>`).join("")}</datalist></div>
+      <div class="field"><label for="vd-cor">Cor</label><input id="vd-cor" type="text" maxlength="120" list="vd-cores" value="${esc(it.cor)}" autocomplete="off"><datalist id="vd-cores">${sugestoesVd("cor").map(s => `<option value="${esc(s)}"></option>`).join("")}</datalist></div></div>
+    <div class="field"><label for="vd-obs">Observação do item</label><textarea id="vd-obs" rows="2" maxlength="2000" placeholder="Ex.: báscula de 400 mm, peitoril fixo de 300 mm, bandeira de 500 mm">${esc(it.observacao)}</textarea></div>
+    <div class="erro-campo" id="e-item" role="alert"></div>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap"><button type="button" class="primary" data-acao="vd-item-incluir">${editando ? "Salvar item" : "Incluir item"}</button>${editando || it.produto_id ? `<button type="button" data-acao="vd-item-limpar">${editando ? "Cancelar edição" : "Limpar"}</button>` : ""}</div>`;
+}
+function resultadosProdutos() {
+  const termos = norm(VE.busca).split(/\s+/).filter(Boolean);
+  const ativos = (VD.produtos || []).filter(p => p.ativo);
+  if (!ativos.length) return `<div class="muted" style="padding:.5rem">Nenhum produto ativo no cadastro.</div>`;
+  if (!termos.length) return "";
+  const achados = ativos.filter(p => { const a = norm([p.linha, p.nome, p.descricao].join(" ")); return termos.every(t => a.includes(t)); });
+  if (!achados.length) return `<div class="muted" style="padding:.5rem">Nenhum produto encontrado para “${esc(VE.busca.trim())}”.</div>`;
+  return achados.slice(0, 40).map(p => `<button type="button" role="option" class="vd-op" data-acao="vd-prod" data-id="${esc(p.id)}">${thumbVd(p.id)}<span><span class="muted">${esc(p.linha || "sem linha")}</span><b style="display:block">${esc(p.nome)}</b></span></button>`).join("") + (achados.length > 40 ? `<div class="muted" style="padding:.4rem">Mostrando 40 de ${achados.length}. Digite mais para filtrar.</div>` : "");
+}
+function lerEditor() {
+  const it = VE.novo;
+  it.quantidade = vdNum($("#vd-qtd").value); it.largura = vdNum($("#vd-larg").value); it.altura = vdNum($("#vd-alt").value);
+  it.vidro = $("#vd-vidro").value.trim(); it.cor = $("#vd-cor").value.trim(); it.observacao = $("#vd-obs").value.trim();
+  return it;
+}
+/* vidro e cor ficam do item anterior para agilizar: sozinhos não contam como item pendente */
+const editorTemConteudo = () => { if (!$("#vd-editor")) return false; const it = lerEditor(); return VE.ed !== null || !!(it.produto_id || it.largura || it.altura || it.observacao); };
+function redesenharEditor(foco) {
+  const box = $("#vd-editor"); if (box) box.innerHTML = editorItemHtml();
+  const l = $("#vd-itens"); if (l) l.innerHTML = listaItensVenda();
+  const tt = $("#vd-itens-tit"); if (tt) tt.textContent = `Itens (${VE.itens.length})`;
+  const f = foco && $(foco); if (f) f.focus();
+}
+function incluirItem() {
+  const it = lerEditor(), er = $("#e-item");
+  if (!it.produto_id) { er.textContent = "Escolha o produto na busca."; const b = $("#vd-busca-prod"); if (b) b.focus(); return; }
+  if (!/^\d{1,4}$/.test(String(it.quantidade)) || Number(it.quantidade) < 1) { er.textContent = "Quantidade: número inteiro de 1 a 9999."; $("#vd-qtd").focus(); return; }
+  if (!/^\d{1,5}$/.test(String(it.largura)) || Number(it.largura) < 1 || Number(it.largura) > 30000) { er.textContent = "Largura: digite em milímetros, só números (ex.: 1200)."; $("#vd-larg").focus(); return; }
+  if (!/^\d{1,5}$/.test(String(it.altura)) || Number(it.altura) < 1 || Number(it.altura) > 30000) { er.textContent = "Altura: digite em milímetros, só números (ex.: 1000)."; $("#vd-alt").focus(); return; }
+  const item = { ...it, quantidade: Number(it.quantidade), largura: Number(it.largura), altura: Number(it.altura) };
+  if (VE.ed !== null) VE.itens[VE.ed] = item; else VE.itens.push(item);
+  const editou = VE.ed !== null;
+  VE.ed = null; VE.novo = { ...ITEM_VAZIO, vidro: item.vidro, cor: item.cor }; VE.busca = ""; VE.sujo = true;
+  redesenharEditor("#vd-busca-prod");
+  aviso(editou ? "Item atualizado." : `Item ${VE.itens.length} incluído.`);
+}
+function escolherProduto(id) {
+  const p = (VD.produtos || []).find(x => x.id === id); if (!p) return;
+  lerEditor();
+  Object.assign(VE.novo, { produto_id: p.id, produto_nome: p.nome, linha: p.linha || "" });
+  redesenharEditor("#vd-larg");
+}
+function payloadVenda() {
+  return VE.itens.map(i => ({ produto_id: i.produto_id, quantidade: i.quantidade, largura: i.largura, altura: i.altura, vidro: i.vidro || null, cor: i.cor || null, observacao: i.observacao || null }));
+}
+async function salvarVenda(depois) {
+  const erroEl = $("#e-venda"), cliente = $("#vd-cliente").value.trim();
+  erroEl.textContent = "";
+  if (cliente.length < 2) { erroEl.textContent = "Escreva o nome do cliente."; $("#vd-cliente").focus(); return false; }
+  if (editorTemConteudo()) { erroEl.textContent = VE.ed !== null ? "Termine a edição do item: clique em Salvar item ou Cancelar edição." : "Há um item no editor que ainda não foi incluído: clique em Incluir item ou em Limpar."; return false; }
+  if (!VE.itens.length) { erroEl.textContent = "Inclua pelo menos um item."; const b = $("#vd-busca-prod"); if (b) b.focus(); return false; }
+  const criarPedido = !VE.id && VE.fase === "pedido";
+  if (criarPedido && !(await confirmar(`Criar o pedido de ${cliente} com ${pl(VE.itens.length, "item", "itens")}? Um card com todos os itens vai para o Backlog do Gestor de Processos e Serviços.`, "Criar pedido", false))) return false;
+  const bts = $$('#f-venda .barra-cartao button'); bts.forEach(b => { b.disabled = true; });
+  try {
+    const id = await Api.rpc("salvar_venda", { p_id: VE.id, p_fase: VE.id ? null : VE.fase, p_cliente: cliente, p_contato: $("#vd-contato").value.trim() || null, p_endereco: $("#vd-endereco").value.trim() || null, p_itens: payloadVenda(), p_versao: VE.versao });
+    const novo = !VE.id;
+    if (depois) { VE.id = id; await carregarVendas(); return id; }
+    VE = null; fechar(); aviso(criarPedido ? "Pedido criado. O card foi para o Gestor de Processos e Serviços." : novo ? "Orçamento criado." : "Alterações salvas."); render();
+    return id;
+  } catch (e) { erroEl.textContent = msgVenda(e); bts.forEach(b => { b.disabled = false; }); return false; }
+}
+async function mudarFaseVenda(id, fase) {
+  const v = VD.vendas.find(x => x.id === id); if (!v) return false;
+  try {
+    await Api.rpc("mudar_fase_venda", { p_id: id, p_fase: fase, p_versao: v.versao });
+    return true;
+  } catch (e) { aviso(msgVenda(e), "erro"); return false; }
+}
+async function transformarEmPedido(id, doFormulario) {
+  const v = VD.vendas.find(x => x.id === id); if (!v) return;
+  const n = itensDaVenda(id).length;
+  if (!(await confirmar(`Transformar o orçamento nº ${v.numero_orcamento} (${v.cliente}) em pedido? Um card com ${pl(doFormulario ? VE.itens.length : n, "item", "itens")} vai para o Backlog do Gestor de Processos e Serviços.`, "Transformar em Pedido", false))) return;
+  if (doFormulario && VE.sujo) { const ok = await salvarVenda(true); if (!ok) return; }
+  if (await mudarFaseVenda(id, "pedido")) {
+    if (doFormulario) { VE = null; fechar(); }
+    await carregarVendas(); const p = VD.vendas.find(x => x.id === id);
+    aviso(`Pedido nº ${p ? p.numero_pedido : ""} criado. O card foi para o Gestor de Processos e Serviços.`);
+    FVD.aba = "pedidos"; salvarFvd(); VD.cache = true; render();
+  } else if (doFormulario) { await carregarVendas(); fechar(); VE = null; VD.cache = true; render(); }
+}
+async function acaoFaseLista(id, fase) {
+  const v = VD.vendas.find(x => x.id === id); if (!v) return;
+  if (fase === "entregue" && !(await confirmar(`Confirmar a entrega do pedido ${v.numero_pedido} (${v.cliente})? O Financeiro recebe um card para criar as cobranças. Depois disso o pedido não volta.`, "Marcar como entregue", false))) return;
+  if (await mudarFaseVenda(id, fase)) aviso(fase === "entregando" ? "Pedido saiu para entrega." : fase === "entregue" ? "Pedido entregue. O card de cobrança foi para o Financeiro." : "Pedido voltou para A entregar.");
+  render();
+}
+async function fecharVenda() {
+  if (VE && VE.sujo && !VE.leitura && !(await confirmar("Fechar sem salvar? O que você mudou neste orçamento/pedido será perdido.", "Fechar sem salvar"))) return;
+  VE = null; fechar();
+}
+dlg.addEventListener("cancel", ev => { if (VE && $("#f-venda", dlg)) { ev.preventDefault(); fecharVenda(); } });
+dlg.addEventListener("close", () => { setTimeout(() => { if (VE && !dlg.open) VE = null; }, 0); });
+
+document.addEventListener("click", async ev => {
+  const el = ev.target.closest('[data-acao^="vd-"]'); if (!el) return;
+  const a = el.dataset.acao, id = el.dataset.id;
+  if (a === "vd-aba") { FVD.aba = el.dataset.valor; salvarFvd(); VD.cache = true; render(); }
+  else if (a === "vd-entrega") { FVD.entrega = el.dataset.valor; salvarFvd(); VD.cache = true; render(); }
+  else if (a === "vd-atualizar") { try { await carregarVendas(); VD.cache = true; await render(); aviso("Atualizado."); } catch (e) { erro(e); } }
+  else if (a === "vd-novo") abrirVenda(null, el.dataset.fase);
+  else if (a === "vd-abrir") abrirVenda(id);
+  else if (a === "vd-card") { try { if (!cartaoLocal(id)) await carregarQuadro(); } catch (e) { erro(e); return; } if (cartaoLocal(id)) abrirCartao(id); else aviso("Este card não aparece para você (área sem acesso ou na lixeira).", "erro"); }
+  else if (a === "vd-transformar") transformarEmPedido(id, false);
+  else if (a === "vd-fase") acaoFaseLista(id, el.dataset.fase);
+  else if (!VE) return;
+  else if (a === "vd-fechar") fecharVenda();
+  else if (a === "vd-transformar-form") transformarEmPedido(VE.id, true);
+  else if (a === "vd-cancelar-orc" || a === "vd-reabrir") {
+    const can = a === "vd-cancelar-orc";
+    if (can && !(await confirmar("Cancelar este orçamento? Ele sai da lista (marque \"Mostrar cancelados\" para ver) e pode ser reaberto depois.", "Cancelar orçamento"))) return;
+    if (await mudarFaseVenda(VE.id, can ? "cancelado" : "orcamento")) { aviso(can ? "Orçamento cancelado." : "Orçamento reaberto."); const vid = VE.id; VE = null; fechar(); await carregarVendas(); VD.cache = true; render(); if (!can) abrirVenda(vid); }
+  }
+  else if (a === "vd-prod") escolherProduto(id);
+  else if (a === "vd-prod-trocar") { lerEditor(); Object.assign(VE.novo, { produto_id: null, produto_nome: "", linha: "" }); VE.busca = ""; redesenharEditor("#vd-busca-prod"); }
+  else if (a === "vd-item-incluir") incluirItem();
+  else if (a === "vd-item-limpar") { VE.ed = null; VE.novo = { ...ITEM_VAZIO }; VE.busca = ""; redesenharEditor("#vd-busca-prod"); }
+  else if (a.startsWith("vd-item-")) {
+    const i = Number(el.dataset.i); if (!(i >= 0 && i < VE.itens.length)) return;
+    if ((a === "vd-item-editar" || a === "vd-item-copiar") && editorTemConteudo()) { $("#e-item").textContent = "Inclua ou limpe o item que está no editor antes."; return; }
+    if (a === "vd-item-sobe" && i > 0) { [VE.itens[i - 1], VE.itens[i]] = [VE.itens[i], VE.itens[i - 1]]; if (VE.ed === i) VE.ed = i - 1; else if (VE.ed === i - 1) VE.ed = i; }
+    else if (a === "vd-item-desce" && i < VE.itens.length - 1) { [VE.itens[i + 1], VE.itens[i]] = [VE.itens[i], VE.itens[i + 1]]; if (VE.ed === i) VE.ed = i + 1; else if (VE.ed === i + 1) VE.ed = i; }
+    else if (a === "vd-item-tirar") { VE.itens.splice(i, 1); if (VE.ed === i) { VE.ed = null; VE.novo = { ...ITEM_VAZIO }; } else if (VE.ed !== null && VE.ed > i) VE.ed--; }
+    else if (a === "vd-item-editar") { VE.ed = i; VE.novo = { ...VE.itens[i] }; }
+    else if (a === "vd-item-copiar") { VE.ed = null; VE.novo = { ...VE.itens[i], largura: "", altura: "" }; }
+    else return;
+    VE.sujo = true; redesenharEditor(a === "vd-item-editar" || a === "vd-item-copiar" ? "#vd-larg" : null);
+    if (a === "vd-item-editar" || a === "vd-item-copiar") { const ed = $("#vd-editor"); if (ed && ed.scrollIntoView) ed.scrollIntoView({ block: "nearest" }); }
+  }
+});
+let tBuscaVd = null;
+document.addEventListener("input", ev => {
+  const t = ev.target;
+  if (t.id === "vd-busca-prod" && VE) { VE.busca = t.value; const r = $("#vd-res"); if (r) r.innerHTML = resultadosProdutos(); return; }
+  if (t.dataset && t.dataset.vd === "busca") { FVD.busca = t.value; clearTimeout(tBuscaVd); tBuscaVd = setTimeout(() => { VD.cache = true; render(); }, 250); return; }
+  if (VE && t.closest && t.closest("#vd-editor")) VE.sujo = true;
+});
+document.addEventListener("change", ev => {
+  const t = ev.target;
+  if (t.dataset && t.dataset.vd === "todos") { FVD.todos = t.checked; salvarFvd(); VD.cache = true; render(); }
+});
+document.addEventListener("keydown", ev => {
+  if (ev.key !== "Enter" || !VE) return;
+  const t = ev.target;
+  if (!t.closest || !t.closest("#vd-editor") || t.tagName === "TEXTAREA" || t.tagName === "BUTTON") return;
+  ev.preventDefault();
+  if (t.id === "vd-busca-prod") { const b = $("#vd-res .vd-op"); if (b) escolherProduto(b.dataset.id); return; }
+  incluirItem();
+});
+/* atualização automática da tela Vendas (a cada 30 s, só com o app em uso e sem formulário aberto) */
+setInterval(async () => {
+  if (!S.eu || rotaAtual() !== "vendas" || document.hidden || VD.semSql) return;
+  if (Date.now() - Sync.ultimaAcao > CFG.ociosoApos || Date.now() - VD.carregadoEm < 30000 || !podeRenderizar()) return;
+  const antes = assinaturaVendas();
+  try { await carregarVendas(); } catch (e) { return; }
+  if (assinaturaVendas() !== antes && rotaAtual() === "vendas" && podeRenderizar()) { VD.cache = true; render(); }
+}, 5000);
 
 /* ===================== INSTALAÇÃO NO CELULAR (PWA) ===================== */
 let promptInstalar = null;
