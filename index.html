@@ -187,6 +187,7 @@ body.arrastando-cartao{overscroll-behavior:none}
 .vd-escolhido{display:flex;gap:.6rem;align-items:center;padding:.35rem .5rem;border:1px solid var(--accent);border-radius:var(--radius);background:var(--accent-soft)}
 .vd-res{max-height:300px;overflow:auto;margin-top:.35rem}
 .vd-op{display:flex;gap:.6rem;align-items:center;width:100%;text-align:left;margin-bottom:.3rem;padding:.3rem .5rem}
+.vd-total{text-align:right;padding:.5rem .2rem 0;font-size:1rem}
 #vd-editor{background:var(--bg);border:1px solid var(--line);border-radius:var(--radius);padding:.75rem}
 @media (max-width:820px){.vd-itens li{flex-wrap:wrap}.vd-bts{width:100%;justify-content:flex-start}}
 </style>
@@ -2397,6 +2398,10 @@ const numVenda = v => v.numero_pedido ? `Pedido ${v.numero_pedido}` : `Orçament
 const vdNum = t => String(t ?? "").trim();
 const prodTxt = i => (i.linha ? i.linha + " · " : "") + i.produto_nome;
 const medidasTxt = i => [`${i.quantidade} un.`, (i.largura || i.altura) ? `L ${i.largura ?? "?"} × A ${i.altura ?? "?"} mm` : "", i.vidro ? "Vidro: " + i.vidro : "", i.cor ? "Cor: " + i.cor : ""].filter(Boolean).join(" · ");
+const valorItem = i => (i.valor_unitario === null || i.valor_unitario === undefined || i.valor_unitario === "") ? null : Number(i.valor_unitario);
+const totalItens = its => { let total = 0, sem = 0; its.forEach(i => { const v = valorItem(i); if (v === null) sem++; else total += v * Number(i.quantidade || 0); }); return { total: Math.round(total * 100) / 100, sem, n: its.length, algum: sem < its.length }; };
+const valorTotalTxt = its => { const t = totalItens(its); if (!t.n || !t.algum) return `<span class="muted">sem valor</span>`; return `<b>${esc(brl(t.total))}</b>${t.sem ? `<span class="muted" style="display:block;font-size:.8rem">${t.sem} sem valor</span>` : ""}`; };
+const valorItemTxt = i => { const v = valorItem(i); return v === null ? "sem valor" : `${brl(v)} un. · subtotal ${brl(v * Number(i.quantidade || 0))}`; };
 const desenhoVd = id => id && VD.desenhos ? VD.desenhos.find(d => d.id === id) : null;
 const thumbVd = produtoId => { const p = VD.produtos && VD.produtos.find(x => x.id === produtoId); const d = p && desenhoVd(p.desenho_id); return d ? imgDesenho(d, THUMB) : `<div class="muted" style="${THUMB};display:flex;align-items:center;justify-content:center">—</div>`; };
 const msgVenda = e => /Could not find the function|salvar_venda|mudar_fase_venda/.test(e.message) && !/permissão|Item \d/.test(e.message) ? "O banco ainda não recebeu a atualização 12. Rode o arquivo kanban_atualizacao_12.sql no Supabase." : e.message;
@@ -2464,20 +2469,20 @@ function tabelaOrcamentos(ed) {
   const lista = VD.vendas.filter(v => v.numero_orcamento && fases.includes(v.fase) && casaBusca(v)).sort((a, b) => b.numero_orcamento - a.numero_orcamento);
   if (!lista.length) return `<div class="panel vazio">${FVD.busca.trim() ? "Nada encontrado nesta busca." : `Nenhum orçamento em aberto.${ed ? " Use <b>Novo orçamento</b>." : ""}`}</div>`;
   const linhas = lista.map(v => `<tr${v.fase === "cancelado" ? ` style="opacity:.6"` : ""}>
-    <td class="n"><b>${esc(v.numero_orcamento)}</b></td><td>${clienteCel(v)}</td><td>${resumoItens(v)}</td><td>${quemQuando(v.criado_em, v.criado_por)}</td>
+    <td class="n"><b>${esc(v.numero_orcamento)}</b></td><td>${clienteCel(v)}</td><td>${resumoItens(v)}</td><td class="n">${valorTotalTxt(itensDaVenda(v.id))}</td><td>${quemQuando(v.criado_em, v.criado_por)}</td>
     <td>${v.fase === "orcamento" ? `<span class="tag">Em aberto</span>` : v.fase === "cancelado" ? `<span class="tag t-perigo">Cancelado</span>` : `<span class="tag t-receber">Virou pedido ${esc(v.numero_pedido)}</span>`}</td>
     <td style="white-space:nowrap"><button type="button" class="small" data-acao="vd-abrir" data-id="${esc(v.id)}">Abrir</button>${ed && v.fase === "orcamento" ? ` <button type="button" class="small primary" data-acao="vd-transformar" data-id="${esc(v.id)}">Transformar em Pedido</button>` : ""}</td></tr>`).join("");
-  return `<div class="panel tabela"><table><thead><tr><th class="n">Nº</th><th>Cliente</th><th>Itens</th><th>Criado</th><th>Situação</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`;
+  return `<div class="panel tabela"><table><thead><tr><th class="n">Nº</th><th>Cliente</th><th>Itens</th><th class="n">Valor</th><th>Criado</th><th>Situação</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`;
 }
 function tabelaPedidos() {
   const lista = VD.vendas.filter(v => v.fase === "pedido" && casaBusca(v)).sort((a, b) => b.numero_pedido - a.numero_pedido);
   if (!lista.length) return `<div class="panel vazio">${FVD.busca.trim() ? "Nada encontrado nesta busca." : "Nenhum pedido em produção."}</div>`;
   const linhas = lista.map(v => {
     const c = cardsDaVenda(v.id, "producao").find(x => !x.excluido && S.quadros.some(q => q.nome === x.area));
-    return `<tr><td class="n"><b>${esc(v.numero_pedido)}</b>${v.numero_orcamento ? `<span class="muted" style="display:block;font-size:.8rem">orç. ${esc(v.numero_orcamento)}</span>` : ""}</td><td>${clienteCel(v)}</td><td>${resumoItens(v)}</td><td>${andamentoTxt(v)}</td><td>${quemQuando(v.pedido_em, v.pedido_por)}</td>
+    return `<tr><td class="n"><b>${esc(v.numero_pedido)}</b>${v.numero_orcamento ? `<span class="muted" style="display:block;font-size:.8rem">orç. ${esc(v.numero_orcamento)}</span>` : ""}</td><td>${clienteCel(v)}</td><td>${resumoItens(v)}</td><td class="n">${valorTotalTxt(itensDaVenda(v.id))}</td><td>${andamentoTxt(v)}</td><td>${quemQuando(v.pedido_em, v.pedido_por)}</td>
       <td style="white-space:nowrap"><button type="button" class="small" data-acao="vd-abrir" data-id="${esc(v.id)}">Abrir</button>${c ? ` <button type="button" class="small" data-acao="vd-card" data-id="${esc(c.cartao_id)}">Ver card</button>` : ""}</td></tr>`;
   }).join("");
-  return `<div class="panel tabela"><table><thead><tr><th class="n">Pedido</th><th>Cliente</th><th>Itens</th><th>Andamento</th><th>Criado</th><th></th></tr></thead><tbody>${linhas}</tbody></table>
+  return `<div class="panel tabela"><table><thead><tr><th class="n">Pedido</th><th>Cliente</th><th>Itens</th><th class="n">Valor</th><th>Andamento</th><th>Criado</th><th></th></tr></thead><tbody>${linhas}</tbody></table>
     <p class="muted" style="margin:.75rem 0 0">Quando todos os cards de produção do pedido estiverem Concluídos, ele passa sozinho para a Entrega (A entregar).</p></div>`;
 }
 function tabelaEntrega(ed) {
@@ -2495,21 +2500,21 @@ function tabelaEntrega(ed) {
     return "";
   };
   const fin = v => { const c = cardsDaVenda(v.id, "financeiro")[0]; return c ? `<span class="tag${c.status === "concluido" ? " t-receber" : ""}">${esc(STATUS[c.status] || c.status)}</span><span class="muted" style="display:block;font-size:.85rem">${esc(c.area)}${c.excluido ? " · na lixeira" : ""}</span>` : `<span class="muted">—</span>`; };
-  const linhas = lista.map(v => `<tr><td class="n"><b>${esc(v.numero_pedido)}</b></td><td>${clienteCel(v)}</td><td>${resumoItens(v)}</td><td>${quando[1](v)}</td>${FVD.entrega === "entregue" ? `<td>${fin(v)}</td>` : ""}
+  const linhas = lista.map(v => `<tr><td class="n"><b>${esc(v.numero_pedido)}</b></td><td>${clienteCel(v)}</td><td>${resumoItens(v)}</td><td class="n">${valorTotalTxt(itensDaVenda(v.id))}</td><td>${quando[1](v)}</td>${FVD.entrega === "entregue" ? `<td>${fin(v)}</td>` : ""}
     <td style="white-space:nowrap"><button type="button" class="small" data-acao="vd-abrir" data-id="${esc(v.id)}">Abrir</button>${acoes(v)}</td></tr>`).join("");
-  return seg + `<div class="panel tabela"><table><thead><tr><th class="n">Pedido</th><th>Cliente e obra</th><th>Itens</th><th>${quando[0]}</th>${FVD.entrega === "entregue" ? "<th>Card de cobrança</th>" : ""}<th></th></tr></thead><tbody>${linhas}</tbody></table>
+  return seg + `<div class="panel tabela"><table><thead><tr><th class="n">Pedido</th><th>Cliente e obra</th><th>Itens</th><th class="n">Valor</th><th>${quando[0]}</th>${FVD.entrega === "entregue" ? "<th>Card de cobrança</th>" : ""}<th></th></tr></thead><tbody>${linhas}</tbody></table>
     ${FVD.entrega === "entregando" ? `<p class="muted" style="margin:.75rem 0 0">Ao marcar como entregue, o Financeiro recebe um card para criar as cobranças do pedido.</p>` : ""}</div>`;
 }
 
 /* ---- formulário do orçamento / pedido ---- */
 let VE = null;
-const ITEM_VAZIO = { produto_id: null, produto_nome: "", linha: "", quantidade: 1, largura: "", altura: "", vidro: "", cor: "", observacao: "" };
+const ITEM_VAZIO = { produto_id: null, produto_nome: "", linha: "", quantidade: 1, largura: "", altura: "", vidro: "", cor: "", observacao: "", valor_unitario: null, valor_txt: "" };
 async function abrirVenda(id, faseNova) {
   try { await carregarProdutosVendas(); } catch (e) { erro(e); return; }
   const v = id ? VD.vendas.find(x => x.id === id) : null;
   if (id && !v) { aviso("Registro não encontrado. Clique em Atualizar.", "erro"); return; }
   const fase = v ? v.fase : faseNova;
-  VE = { id: v ? v.id : null, fase, versao: v ? v.versao : null, itens: v ? itensDaVenda(v.id).map(i => ({ ...ITEM_VAZIO, ...i, vidro: i.vidro || "", cor: i.cor || "", observacao: i.observacao || "" })) : [], ed: null, novo: { ...ITEM_VAZIO }, sujo: false, leitura: !podeEditarVendas() || !["orcamento", "pedido"].includes(fase), busca: "" };
+  VE = { id: v ? v.id : null, fase, versao: v ? v.versao : null, itens: v ? itensDaVenda(v.id).map(i => ({ ...ITEM_VAZIO, ...i, vidro: i.vidro || "", cor: i.cor || "", observacao: i.observacao || "", valor_unitario: valorItem(i), valor_txt: "" })) : [], ed: null, novo: { ...ITEM_VAZIO }, sujo: false, leitura: !podeEditarVendas() || !["orcamento", "pedido"].includes(fase), busca: "" };
   desenharVenda(v);
 }
 function tituloVenda(v) {
@@ -2525,23 +2530,28 @@ function desenharVenda(v) {
   if (podeEditarVendas() && v && v.fase === "cancelado") acoes.push(`<button type="button" data-acao="vd-reabrir">Reabrir orçamento</button>`);
   if (!ro && v && v.fase === "orcamento") acoes.push(`<button type="button" data-acao="vd-transformar-form">Transformar em Pedido</button>`);
   if (!ro) acoes.push(`<button type="submit" class="primary">${!v && VE.fase === "pedido" ? "Criar pedido" : "Salvar"}</button>`);
-  const info = v ? `<p class="muted" style="margin:0 0 .75rem;font-size:.9rem"><span class="tag">${esc(FASES_VENDA[v.fase])}</span> ${v.numero_pedido && v.numero_orcamento ? `Veio do orçamento nº ${esc(v.numero_orcamento)}. ` : ""}Criado por ${esc(nomeDe(v.criado_por))} em ${esc(horaBR(v.criado_em))}.${v.numero_pedido ? ` Card: ${andamentoTxt(v).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()}.` : ""}${v.fase === "cancelado" ? " Reabra para alterar." : ["a_entregar", "entregando", "entregue"].includes(v.fase) ? " Pedido na entrega: não pode mais ser alterado." : v.fase === "pedido" && !ro ? " Alterar o pedido atualiza o card do PeS (e deixa um comentário nele)." : ""}</p>` : `<p class="muted" style="margin:0 0 .75rem;font-size:.9rem">${VE.fase === "pedido" ? "Ao criar, um card com todos os itens vai para o Backlog do Gestor de Processos e Serviços." : "O orçamento não gera card. Quando fechar, use Transformar em Pedido."}</p>`;
+  const info = v ? `<p class="muted" style="margin:0 0 .75rem;font-size:.9rem"><span class="tag">${esc(FASES_VENDA[v.fase])}</span> ${v.numero_pedido && v.numero_orcamento ? `Veio do orçamento nº ${esc(v.numero_orcamento)}. ` : ""}Criado por ${esc(nomeDe(v.criado_por))} em ${esc(horaBR(v.criado_em))}.${v.numero_pedido ? ` Card: ${andamentoTxt(v).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()}.` : ""}${v.fase === "cancelado" ? " Reabra para alterar." : ["a_entregar", "entregando", "entregue"].includes(v.fase) ? " Pedido na entrega: não pode mais ser alterado." : v.fase === "pedido" && !ro ? " Alterar o pedido atualiza o card do PeS (e deixa um comentário nele). Os valores não aparecem no card do PeS." : ""}</p>` : `<p class="muted" style="margin:0 0 .75rem;font-size:.9rem">${VE.fase === "pedido" ? "Ao criar, um card com todos os itens vai para o Backlog do Gestor de Processos e Serviços (sem os valores)." : "O orçamento não gera card. Quando fechar, use Transformar em Pedido."}</p>`;
   abrir(`<form id="f-venda" novalidate><div class="barra-cartao"><h2>${esc(tituloVenda(v))}</h2><div class="acoes">${acoes.join("")}</div></div>${info}
     <div class="grade2"><div class="field"><label for="vd-cliente">Cliente *</label><input id="vd-cliente" type="text" maxlength="150" value="${esc(v ? v.cliente : "")}" autocomplete="off"${dis}></div>
       <div class="field"><label for="vd-contato">Contato</label><input id="vd-contato" type="text" maxlength="150" value="${esc(v ? v.contato || "" : "")}" placeholder="Telefone, WhatsApp, e-mail, nome de quem atende" autocomplete="off"${dis}></div></div>
     <div class="field"><label for="vd-endereco">Endereço da obra</label><input id="vd-endereco" type="text" maxlength="300" value="${esc(v ? v.endereco || "" : "")}" autocomplete="off"${dis}></div>
-    <div class="bloco"><h3 id="vd-itens-tit">Itens (${VE.itens.length})</h3><div id="vd-itens">${listaItensVenda()}</div></div>
+    <div class="bloco"><h3 id="vd-itens-tit">Itens (${VE.itens.length})</h3><div id="vd-itens">${listaItensVenda()}</div><div id="vd-total" class="vd-total">${totalFormTxt()}</div></div>
     ${ro ? "" : `<div class="bloco" id="vd-editor">${editorItemHtml()}</div>`}
     <div class="erro-campo" id="e-venda" role="alert"></div></form>`, true);
   $("#f-venda").onsubmit = ev => { ev.preventDefault(); salvarVenda(); };
   if (!ro) { ["vd-cliente", "vd-contato", "vd-endereco"].forEach(i => $("#" + i).addEventListener("input", () => { VE.sujo = true; })); if (!v) $("#vd-cliente").focus(); }
+}
+function totalFormTxt() {
+  const t = totalItens(VE.itens);
+  if (!t.n) return "";
+  return `Total: <b>${t.algum ? esc(brl(t.total)) : "sem valor"}</b>${t.sem && t.algum ? ` <span class="muted">(${pl(t.sem, "item", "itens")} sem valor)</span>` : ""}`;
 }
 function listaItensVenda() {
   if (!VE.itens.length) return `<div class="vazio" style="padding:1rem">Nenhum item ainda.${VE.leitura ? "" : " Procure o produto abaixo, digite as medidas e clique em Incluir item."}</div>`;
   return `<ol class="vd-itens">${VE.itens.map((i, k) => {
     const p = VD.produtos && VD.produtos.find(x => x.id === i.produto_id);
     return `<li${VE.ed === k ? ` class="vd-editando"` : ""}><span class="n" style="min-width:1.6rem"><b>${k + 1}.</b></span>${thumbVd(i.produto_id)}
-      <span style="flex:1;min-width:0"><b>${esc(prodTxt(i))}</b>${p && !p.ativo ? ` <span class="muted">(inativo no cadastro)</span>` : ""}<span class="muted" style="display:block;font-size:.88rem">${esc(medidasTxt(i))}</span>${i.observacao ? `<span style="display:block;font-size:.88rem;white-space:pre-wrap">Obs.: ${esc(i.observacao)}</span>` : ""}</span>
+      <span style="flex:1;min-width:0"><b>${esc(prodTxt(i))}</b>${p && !p.ativo ? ` <span class="muted">(inativo no cadastro)</span>` : ""}<span class="muted" style="display:block;font-size:.88rem">${esc(medidasTxt(i))}</span><span style="display:block;font-size:.88rem">${esc(valorItemTxt(i))}</span>${i.observacao ? `<span style="display:block;font-size:.88rem;white-space:pre-wrap">Obs.: ${esc(i.observacao)}</span>` : ""}</span>
       ${VE.leitura ? "" : `<span class="vd-bts"><button type="button" class="small" data-acao="vd-item-sobe" data-i="${k}" aria-label="Subir o item ${k + 1}"${k === 0 ? " disabled" : ""}>↑</button><button type="button" class="small" data-acao="vd-item-desce" data-i="${k}" aria-label="Descer o item ${k + 1}"${k === VE.itens.length - 1 ? " disabled" : ""}>↓</button><button type="button" class="small" data-acao="vd-item-editar" data-i="${k}">Editar</button><button type="button" class="small" data-acao="vd-item-copiar" data-i="${k}" title="Repetir este item para mudar só as medidas">Repetir</button><button type="button" class="small danger" data-acao="vd-item-tirar" data-i="${k}" aria-label="Tirar o item ${k + 1}">Tirar</button></span>`}</li>`;
   }).join("")}</ol>`;
 }
@@ -2555,8 +2565,9 @@ function editorItemHtml() {
     <div class="grade3"><div class="field"><label for="vd-qtd">Quantidade *</label><input id="vd-qtd" type="number" inputmode="numeric" min="1" max="9999" step="1" value="${esc(it.quantidade)}"></div>
       <div class="field"><label for="vd-larg">Largura (mm) *</label><input id="vd-larg" type="number" inputmode="numeric" min="1" max="30000" step="1" value="${esc(it.largura ?? "")}" placeholder="Ex.: 1200"></div>
       <div class="field"><label for="vd-alt">Altura (mm) *</label><input id="vd-alt" type="number" inputmode="numeric" min="1" max="30000" step="1" value="${esc(it.altura ?? "")}" placeholder="Ex.: 1000"></div></div>
-    <div class="grade2"><div class="field"><label for="vd-vidro">Vidro</label><input id="vd-vidro" type="text" maxlength="120" list="vd-vidros" value="${esc(it.vidro)}" autocomplete="off"><datalist id="vd-vidros">${sugestoesVd("vidro").map(s => `<option value="${esc(s)}"></option>`).join("")}</datalist></div>
-      <div class="field"><label for="vd-cor">Cor</label><input id="vd-cor" type="text" maxlength="120" list="vd-cores" value="${esc(it.cor)}" autocomplete="off"><datalist id="vd-cores">${sugestoesVd("cor").map(s => `<option value="${esc(s)}"></option>`).join("")}</datalist></div></div>
+    <div class="grade3"><div class="field"><label for="vd-vidro">Vidro</label><input id="vd-vidro" type="text" maxlength="120" list="vd-vidros" value="${esc(it.vidro)}" autocomplete="off"><datalist id="vd-vidros">${sugestoesVd("vidro").map(s => `<option value="${esc(s)}"></option>`).join("")}</datalist></div>
+      <div class="field"><label for="vd-cor">Cor</label><input id="vd-cor" type="text" maxlength="120" list="vd-cores" value="${esc(it.cor)}" autocomplete="off"><datalist id="vd-cores">${sugestoesVd("cor").map(s => `<option value="${esc(s)}"></option>`).join("")}</datalist></div>
+      <div class="field"><label for="vd-valor">Valor unitário (R$)</label><input id="vd-valor" type="text" inputmode="decimal" maxlength="20" value="${esc(it.valor_txt || (valorItem(it) === null ? "" : valorTxt(valorItem(it))))}" placeholder="Ex.: 1.234,56" autocomplete="off"></div></div>
     <div class="field"><label for="vd-obs">Observação do item</label><textarea id="vd-obs" rows="2" maxlength="2000" placeholder="Ex.: báscula de 400 mm, peitoril fixo de 300 mm, bandeira de 500 mm">${esc(it.observacao)}</textarea></div>
     <div class="erro-campo" id="e-item" role="alert"></div>
     <div style="display:flex;gap:.5rem;flex-wrap:wrap"><button type="button" class="primary" data-acao="vd-item-incluir">${editando ? "Salvar item" : "Incluir item"}</button>${editando || it.produto_id ? `<button type="button" data-acao="vd-item-limpar">${editando ? "Cancelar edição" : "Limpar"}</button>` : ""}</div>`;
@@ -2573,15 +2584,16 @@ function resultadosProdutos() {
 function lerEditor() {
   const it = VE.novo;
   it.quantidade = vdNum($("#vd-qtd").value); it.largura = vdNum($("#vd-larg").value); it.altura = vdNum($("#vd-alt").value);
-  it.vidro = $("#vd-vidro").value.trim(); it.cor = $("#vd-cor").value.trim(); it.observacao = $("#vd-obs").value.trim();
+  it.vidro = $("#vd-vidro").value.trim(); it.cor = $("#vd-cor").value.trim(); it.observacao = $("#vd-obs").value.trim(); it.valor_txt = $("#vd-valor").value.trim(); it.valor_unitario = null;
   return it;
 }
 /* vidro e cor ficam do item anterior para agilizar: sozinhos não contam como item pendente */
-const editorTemConteudo = () => { if (!$("#vd-editor")) return false; const it = lerEditor(); return VE.ed !== null || !!(it.produto_id || it.largura || it.altura || it.observacao); };
+const editorTemConteudo = () => { if (!$("#vd-editor")) return false; const it = lerEditor(); return VE.ed !== null || !!(it.produto_id || it.largura || it.altura || it.observacao || it.valor_txt); };
 function redesenharEditor(foco) {
   const box = $("#vd-editor"); if (box) box.innerHTML = editorItemHtml();
   const l = $("#vd-itens"); if (l) l.innerHTML = listaItensVenda();
   const tt = $("#vd-itens-tit"); if (tt) tt.textContent = `Itens (${VE.itens.length})`;
+  const tot = $("#vd-total"); if (tot) tot.innerHTML = totalFormTxt();
   const f = foco && $(foco); if (f) f.focus();
 }
 function incluirItem() {
@@ -2590,7 +2602,9 @@ function incluirItem() {
   if (!/^\d{1,4}$/.test(String(it.quantidade)) || Number(it.quantidade) < 1) { er.textContent = "Quantidade: número inteiro de 1 a 9999."; $("#vd-qtd").focus(); return; }
   if (!/^\d{1,5}$/.test(String(it.largura)) || Number(it.largura) < 1 || Number(it.largura) > 30000) { er.textContent = "Largura: digite em milímetros, só números (ex.: 1200)."; $("#vd-larg").focus(); return; }
   if (!/^\d{1,5}$/.test(String(it.altura)) || Number(it.altura) < 1 || Number(it.altura) > 30000) { er.textContent = "Altura: digite em milímetros, só números (ex.: 1000)."; $("#vd-alt").focus(); return; }
-  const item = { ...it, quantidade: Number(it.quantidade), largura: Number(it.largura), altura: Number(it.altura) };
+  const valor = lerValor(it.valor_txt);
+  if (Number.isNaN(valor) || (valor !== null && valor > 9999999999.99)) { er.textContent = "Valor unitário inválido. Use o formato 1.234,56 (ou deixe em branco)."; $("#vd-valor").focus(); return; }
+  const item = { ...it, quantidade: Number(it.quantidade), largura: Number(it.largura), altura: Number(it.altura), valor_unitario: valor, valor_txt: "" };
   if (VE.ed !== null) VE.itens[VE.ed] = item; else VE.itens.push(item);
   const editou = VE.ed !== null;
   VE.ed = null; VE.novo = { ...ITEM_VAZIO, vidro: item.vidro, cor: item.cor }; VE.busca = ""; VE.sujo = true;
@@ -2604,7 +2618,7 @@ function escolherProduto(id) {
   redesenharEditor("#vd-larg");
 }
 function payloadVenda() {
-  return VE.itens.map(i => ({ produto_id: i.produto_id, quantidade: i.quantidade, largura: i.largura, altura: i.altura, vidro: i.vidro || null, cor: i.cor || null, observacao: i.observacao || null }));
+  return VE.itens.map(i => ({ produto_id: i.produto_id, quantidade: i.quantidade, largura: i.largura, altura: i.altura, vidro: i.vidro || null, cor: i.cor || null, observacao: i.observacao || null, valor_unitario: valorItem(i) }));
 }
 async function salvarVenda(depois) {
   const erroEl = $("#e-venda"), cliente = $("#vd-cliente").value.trim();
@@ -2684,8 +2698,8 @@ document.addEventListener("click", async ev => {
     if (a === "vd-item-sobe" && i > 0) { [VE.itens[i - 1], VE.itens[i]] = [VE.itens[i], VE.itens[i - 1]]; if (VE.ed === i) VE.ed = i - 1; else if (VE.ed === i - 1) VE.ed = i; }
     else if (a === "vd-item-desce" && i < VE.itens.length - 1) { [VE.itens[i + 1], VE.itens[i]] = [VE.itens[i], VE.itens[i + 1]]; if (VE.ed === i) VE.ed = i + 1; else if (VE.ed === i + 1) VE.ed = i; }
     else if (a === "vd-item-tirar") { VE.itens.splice(i, 1); if (VE.ed === i) { VE.ed = null; VE.novo = { ...ITEM_VAZIO }; } else if (VE.ed !== null && VE.ed > i) VE.ed--; }
-    else if (a === "vd-item-editar") { VE.ed = i; VE.novo = { ...VE.itens[i] }; }
-    else if (a === "vd-item-copiar") { VE.ed = null; VE.novo = { ...VE.itens[i], largura: "", altura: "" }; }
+    else if (a === "vd-item-editar") { VE.ed = i; VE.novo = { ...VE.itens[i], valor_txt: "" }; }
+    else if (a === "vd-item-copiar") { VE.ed = null; VE.novo = { ...VE.itens[i], largura: "", altura: "", valor_unitario: null, valor_txt: "" }; }
     else return;
     VE.sujo = true; redesenharEditor(a === "vd-item-editar" || a === "vd-item-copiar" ? "#vd-larg" : null);
     if (a === "vd-item-editar" || a === "vd-item-copiar") { const ed = $("#vd-editor"); if (ed && ed.scrollIntoView) ed.scrollIntoView({ block: "nearest" }); }
