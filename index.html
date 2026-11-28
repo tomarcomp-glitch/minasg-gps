@@ -2496,20 +2496,20 @@ function tabelaOrcamentos(ed) {
   const lista = VD.vendas.filter(v => v.numero_orcamento && fases.includes(v.fase) && casaBusca(v)).sort((a, b) => b.numero_orcamento - a.numero_orcamento);
   if (!lista.length) return `<div class="panel vazio">${FVD.busca.trim() ? "Nada encontrado nesta busca." : `Nenhum orçamento em aberto.${ed ? " Use <b>Novo orçamento</b>." : ""}`}</div>`;
   const linhas = lista.map(v => `<tr${v.fase === "cancelado" ? ` style="opacity:.6"` : ""}>
-    <td class="n"><b>${esc(v.numero_orcamento)}</b></td><td class="vd-col-cli">${clienteCel(v)}</td><td class="vd-col-itens">${resumoItens(v)}</td><td class="n">${valorVendaTxt(v)}</td><td>${quemQuando(v.criado_em, v.criado_por)}</td>
+    <td class="n"><b>${esc(v.numero_orcamento)}</b></td><td class="vd-col-cli">${clienteCel(v)}</td><td class="n">${valorVendaTxt(v)}</td><td>${quemQuando(v.criado_em, v.criado_por)}</td>
     <td>${v.fase === "orcamento" ? `<span class="tag">Em aberto</span>` : v.fase === "cancelado" ? `<span class="tag t-perigo">Cancelado</span>` : `<span class="tag t-receber">Virou pedido ${esc(v.numero_pedido)}</span>`}</td>
     <td class="vd-acao"><div class="vd-bts"><button type="button" class="small" data-acao="vd-abrir" data-id="${esc(v.id)}">Abrir</button>${ed && v.fase === "orcamento" ? `<button type="button" class="small primary" data-acao="vd-transformar" data-id="${esc(v.id)}">Transformar em Pedido</button>` : ""}</div></td></tr>`).join("");
-  return `<div class="panel tabela"><table><thead><tr><th class="n">Nº</th><th>Cliente</th><th>Itens</th><th class="n">Valor</th><th>Criado</th><th>Situação</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`;
+  return `<div class="panel tabela"><table><thead><tr><th class="n">Nº</th><th>Cliente</th><th class="n">Valor</th><th>Criado</th><th>Situação</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`;
 }
 function tabelaPedidos() {
   const lista = VD.vendas.filter(v => v.fase === "pedido" && casaBusca(v)).sort((a, b) => b.numero_pedido - a.numero_pedido);
   if (!lista.length) return `<div class="panel vazio">${FVD.busca.trim() ? "Nada encontrado nesta busca." : "Nenhum pedido em produção."}</div>`;
   const linhas = lista.map(v => {
     const c = cardsDaVenda(v.id, "producao").find(x => !x.excluido && S.quadros.some(q => q.nome === x.area));
-    return `<tr><td class="n"><b>${esc(v.numero_pedido)}</b>${v.numero_orcamento ? `<span class="muted" style="display:block;font-size:.8rem">orç. ${esc(v.numero_orcamento)}</span>` : ""}</td><td class="vd-col-cli">${clienteCel(v)}</td><td class="vd-col-itens">${resumoItens(v)}</td><td class="n">${valorVendaTxt(v)}</td><td>${andamentoTxt(v)}</td><td>${quemQuando(v.pedido_em, v.pedido_por)}</td>
+    return `<tr><td class="n"><b>${esc(v.numero_pedido)}</b>${v.numero_orcamento ? `<span class="muted" style="display:block;font-size:.8rem">orç. ${esc(v.numero_orcamento)}</span>` : ""}</td><td class="vd-col-cli">${clienteCel(v)}</td><td class="n">${valorVendaTxt(v)}</td><td>${andamentoTxt(v)}</td><td>${quemQuando(v.pedido_em, v.pedido_por)}</td>
       <td class="vd-acao"><div class="vd-bts"><button type="button" class="small" data-acao="vd-abrir" data-id="${esc(v.id)}">Abrir</button>${c ? `<button type="button" class="small" data-acao="vd-card" data-id="${esc(c.cartao_id)}">Ver card</button>` : ""}</div></td></tr>`;
   }).join("");
-  return `<div class="panel tabela"><table><thead><tr><th class="n">Pedido</th><th>Cliente</th><th>Itens</th><th class="n">Valor</th><th>Andamento</th><th>Criado</th><th></th></tr></thead><tbody>${linhas}</tbody></table>
+  return `<div class="panel tabela"><table><thead><tr><th class="n">Pedido</th><th>Cliente</th><th class="n">Valor</th><th>Andamento</th><th>Criado</th><th></th></tr></thead><tbody>${linhas}</tbody></table>
     <p class="muted" style="margin:.75rem 0 0">Quando todos os cards de produção do pedido estiverem Concluídos, ele passa sozinho para a Entrega (A entregar).</p></div>`;
 }
 function tabelaEntrega(ed) {
@@ -2527,9 +2527,9 @@ function tabelaEntrega(ed) {
     return "";
   };
   const fin = v => { const c = cardsDaVenda(v.id, "financeiro")[0]; return c ? `<span class="tag${c.status === "concluido" ? " t-receber" : ""}">${esc(STATUS[c.status] || c.status)}</span><span class="muted" style="display:block;font-size:.85rem">${esc(c.area)}${c.excluido ? " · na lixeira" : ""}</span>` : `<span class="muted">—</span>`; };
-  const linhas = lista.map(v => `<tr><td class="n"><b>${esc(v.numero_pedido)}</b></td><td class="vd-col-cli">${clienteCel(v)}</td><td class="vd-col-itens">${resumoItens(v)}</td><td class="n">${valorVendaTxt(v)}</td><td>${quando[1](v)}</td>${FVD.entrega === "entregue" ? `<td>${fin(v)}</td>` : ""}
+  const linhas = lista.map(v => `<tr><td class="n"><b>${esc(v.numero_pedido)}</b></td><td class="vd-col-cli">${clienteCel(v)}</td><td class="n">${valorVendaTxt(v)}</td><td>${quando[1](v)}</td>${FVD.entrega === "entregue" ? `<td>${fin(v)}</td>` : ""}
     <td class="vd-acao"><div class="vd-bts"><button type="button" class="small" data-acao="vd-abrir" data-id="${esc(v.id)}">Abrir</button>${acoes(v)}</div></td></tr>`).join("");
-  return seg + `<div class="panel tabela"><table><thead><tr><th class="n">Pedido</th><th>Cliente e obra</th><th>Itens</th><th class="n">Valor</th><th>${quando[0]}</th>${FVD.entrega === "entregue" ? "<th>Card de cobrança</th>" : ""}<th></th></tr></thead><tbody>${linhas}</tbody></table>
+  return seg + `<div class="panel tabela"><table><thead><tr><th class="n">Pedido</th><th>Cliente e obra</th><th class="n">Valor</th><th>${quando[0]}</th>${FVD.entrega === "entregue" ? "<th>Card de cobrança</th>" : ""}<th></th></tr></thead><tbody>${linhas}</tbody></table>
     ${FVD.entrega === "entregando" ? `<p class="muted" style="margin:.75rem 0 0">Ao marcar como entregue, o Financeiro recebe um card para criar as cobranças do pedido.</p>` : ""}</div>`;
 }
 
