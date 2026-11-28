@@ -183,13 +183,19 @@ body.arrastando-cartao{overscroll-behavior:none}
 .vd-itens{list-style:none;margin:0;padding:0}
 .vd-itens li{display:flex;gap:.6rem;align-items:flex-start;padding:.45rem .2rem;border-bottom:1px solid var(--line)}
 .vd-itens li.vd-editando{background:var(--accent-soft)}
-.vd-bts{display:flex;gap:.25rem;flex-wrap:wrap;justify-content:flex-end}
+.vd-bts{display:flex;flex-direction:column;gap:.3rem;flex:none;width:9.5rem}
+.vd-bts button{width:100%}
+.vd-ud{display:flex;gap:.3rem}.vd-ud button{flex:1}
+dialog.vd-cheia{width:98vw;max-width:none;height:96vh;max-height:96vh}
+td.vd-acao{width:1%;white-space:nowrap;vertical-align:top}td.vd-acao .vd-bts{width:11.5rem}td.vd-acao button{white-space:normal}
+td.vd-col-itens{min-width:16rem}td.vd-col-cli{min-width:11rem}
+.vd-itens li>span[style*="flex:1"]{padding-right:.5rem;line-height:1.45}
 .vd-escolhido{display:flex;gap:.6rem;align-items:center;padding:.35rem .5rem;border:1px solid var(--accent);border-radius:var(--radius);background:var(--accent-soft)}
 .vd-res{max-height:300px;overflow:auto;margin-top:.35rem}
 .vd-op{display:flex;gap:.6rem;align-items:center;width:100%;text-align:left;margin-bottom:.3rem;padding:.3rem .5rem}
 .vd-total{text-align:right;padding:.5rem .2rem 0;font-size:1rem}
 #vd-editor{background:var(--bg);border:1px solid var(--line);border-radius:var(--radius);padding:.75rem}
-@media (max-width:820px){.vd-itens li{flex-wrap:wrap}.vd-bts{width:100%;justify-content:flex-start}}
+@media (max-width:820px){.vd-itens li{flex-wrap:wrap}.vd-bts{width:100%;flex-direction:row;flex-wrap:wrap}.vd-bts button{width:auto}.vd-ud{display:contents}.vd-ud button{flex:none}dialog.vd-cheia{width:100vw;height:100vh;max-height:100vh;border-radius:0}}
 </style>
 </head>
 <body>
@@ -2462,7 +2468,7 @@ function andamentoTxt(v) {
   const ok = cs.filter(c => c.status === "concluido").length;
   return `<b>${ok}</b> de ${cs.length} cards concluídos`;
 }
-const resumoItens = v => { const its = itensDaVenda(v.id); return `<b>${its.length}</b> ${its.length === 1 ? "item" : "itens"}<span class="muted" style="display:block;font-size:.85rem">${esc(curto(its.map(i => i.produto_nome + (i.quantidade > 1 ? " ×" + i.quantidade : "")).join("; "), 80))}</span>`; };
+const resumoItens = v => { const its = itensDaVenda(v.id); return `<b>${its.length}</b> ${its.length === 1 ? "item" : "itens"}<span class="muted" style="display:block;font-size:.85rem">${esc(curto(its.map(i => i.produto_nome + (i.quantidade > 1 ? " ×" + i.quantidade : "")).join("; "), 140))}</span>`; };
 const clienteCel = v => `<b>${esc(v.cliente)}</b>${clipeTxt(v)}${v.contato ? `<span class="muted" style="display:block;font-size:.85rem">${esc(v.contato)}</span>` : ""}${v.endereco ? `<span class="muted" style="display:block;font-size:.85rem">${esc(curto(v.endereco, 70))}</span>` : ""}`;
 const quemQuando = (em, por) => em ? `${esc(horaBR(em))}${por ? `<span class="muted" style="display:block;font-size:.85rem">${esc(String(nomeDe(por)).split(" ")[0])}</span>` : ""}` : `<span class="muted">—</span>`;
 
@@ -2490,9 +2496,9 @@ function tabelaOrcamentos(ed) {
   const lista = VD.vendas.filter(v => v.numero_orcamento && fases.includes(v.fase) && casaBusca(v)).sort((a, b) => b.numero_orcamento - a.numero_orcamento);
   if (!lista.length) return `<div class="panel vazio">${FVD.busca.trim() ? "Nada encontrado nesta busca." : `Nenhum orçamento em aberto.${ed ? " Use <b>Novo orçamento</b>." : ""}`}</div>`;
   const linhas = lista.map(v => `<tr${v.fase === "cancelado" ? ` style="opacity:.6"` : ""}>
-    <td class="n"><b>${esc(v.numero_orcamento)}</b></td><td>${clienteCel(v)}</td><td>${resumoItens(v)}</td><td class="n">${valorVendaTxt(v)}</td><td>${quemQuando(v.criado_em, v.criado_por)}</td>
+    <td class="n"><b>${esc(v.numero_orcamento)}</b></td><td class="vd-col-cli">${clienteCel(v)}</td><td class="vd-col-itens">${resumoItens(v)}</td><td class="n">${valorVendaTxt(v)}</td><td>${quemQuando(v.criado_em, v.criado_por)}</td>
     <td>${v.fase === "orcamento" ? `<span class="tag">Em aberto</span>` : v.fase === "cancelado" ? `<span class="tag t-perigo">Cancelado</span>` : `<span class="tag t-receber">Virou pedido ${esc(v.numero_pedido)}</span>`}</td>
-    <td style="white-space:nowrap"><button type="button" class="small" data-acao="vd-abrir" data-id="${esc(v.id)}">Abrir</button>${ed && v.fase === "orcamento" ? ` <button type="button" class="small primary" data-acao="vd-transformar" data-id="${esc(v.id)}">Transformar em Pedido</button>` : ""}</td></tr>`).join("");
+    <td class="vd-acao"><div class="vd-bts"><button type="button" class="small" data-acao="vd-abrir" data-id="${esc(v.id)}">Abrir</button>${ed && v.fase === "orcamento" ? `<button type="button" class="small primary" data-acao="vd-transformar" data-id="${esc(v.id)}">Transformar em Pedido</button>` : ""}</div></td></tr>`).join("");
   return `<div class="panel tabela"><table><thead><tr><th class="n">Nº</th><th>Cliente</th><th>Itens</th><th class="n">Valor</th><th>Criado</th><th>Situação</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`;
 }
 function tabelaPedidos() {
@@ -2500,8 +2506,8 @@ function tabelaPedidos() {
   if (!lista.length) return `<div class="panel vazio">${FVD.busca.trim() ? "Nada encontrado nesta busca." : "Nenhum pedido em produção."}</div>`;
   const linhas = lista.map(v => {
     const c = cardsDaVenda(v.id, "producao").find(x => !x.excluido && S.quadros.some(q => q.nome === x.area));
-    return `<tr><td class="n"><b>${esc(v.numero_pedido)}</b>${v.numero_orcamento ? `<span class="muted" style="display:block;font-size:.8rem">orç. ${esc(v.numero_orcamento)}</span>` : ""}</td><td>${clienteCel(v)}</td><td>${resumoItens(v)}</td><td class="n">${valorVendaTxt(v)}</td><td>${andamentoTxt(v)}</td><td>${quemQuando(v.pedido_em, v.pedido_por)}</td>
-      <td style="white-space:nowrap"><button type="button" class="small" data-acao="vd-abrir" data-id="${esc(v.id)}">Abrir</button>${c ? ` <button type="button" class="small" data-acao="vd-card" data-id="${esc(c.cartao_id)}">Ver card</button>` : ""}</td></tr>`;
+    return `<tr><td class="n"><b>${esc(v.numero_pedido)}</b>${v.numero_orcamento ? `<span class="muted" style="display:block;font-size:.8rem">orç. ${esc(v.numero_orcamento)}</span>` : ""}</td><td class="vd-col-cli">${clienteCel(v)}</td><td class="vd-col-itens">${resumoItens(v)}</td><td class="n">${valorVendaTxt(v)}</td><td>${andamentoTxt(v)}</td><td>${quemQuando(v.pedido_em, v.pedido_por)}</td>
+      <td class="vd-acao"><div class="vd-bts"><button type="button" class="small" data-acao="vd-abrir" data-id="${esc(v.id)}">Abrir</button>${c ? `<button type="button" class="small" data-acao="vd-card" data-id="${esc(c.cartao_id)}">Ver card</button>` : ""}</div></td></tr>`;
   }).join("");
   return `<div class="panel tabela"><table><thead><tr><th class="n">Pedido</th><th>Cliente</th><th>Itens</th><th class="n">Valor</th><th>Andamento</th><th>Criado</th><th></th></tr></thead><tbody>${linhas}</tbody></table>
     <p class="muted" style="margin:.75rem 0 0">Quando todos os cards de produção do pedido estiverem Concluídos, ele passa sozinho para a Entrega (A entregar).</p></div>`;
@@ -2516,13 +2522,13 @@ function tabelaEntrega(ed) {
   const quando = { a_entregar: ["Pronto desde", v => quemQuando(v.pronto_em)], entregando: ["Saiu em", v => quemQuando(v.saiu_em, v.saiu_por)], entregue: ["Entregue em", v => quemQuando(v.entregue_em, v.entregue_por)] }[FVD.entrega];
   const acoes = v => {
     if (!ed) return "";
-    if (v.fase === "a_entregar") return ` <button type="button" class="small primary" data-acao="vd-fase" data-fase="entregando" data-id="${esc(v.id)}">Saiu para entrega</button>`;
-    if (v.fase === "entregando") return ` <button type="button" class="small primary" data-acao="vd-fase" data-fase="entregue" data-id="${esc(v.id)}">Marcar como entregue</button> <button type="button" class="small" data-acao="vd-fase" data-fase="a_entregar" data-id="${esc(v.id)}">Voltar para A entregar</button>`;
+    if (v.fase === "a_entregar") return `<button type="button" class="small primary" data-acao="vd-fase" data-fase="entregando" data-id="${esc(v.id)}">Saiu para entrega</button>`;
+    if (v.fase === "entregando") return ` <button type="button" class="small primary" data-acao="vd-fase" data-fase="entregue" data-id="${esc(v.id)}">Marcar como entregue</button><button type="button" class="small" data-acao="vd-fase" data-fase="a_entregar" data-id="${esc(v.id)}">Voltar para A entregar</button>`;
     return "";
   };
   const fin = v => { const c = cardsDaVenda(v.id, "financeiro")[0]; return c ? `<span class="tag${c.status === "concluido" ? " t-receber" : ""}">${esc(STATUS[c.status] || c.status)}</span><span class="muted" style="display:block;font-size:.85rem">${esc(c.area)}${c.excluido ? " · na lixeira" : ""}</span>` : `<span class="muted">—</span>`; };
-  const linhas = lista.map(v => `<tr><td class="n"><b>${esc(v.numero_pedido)}</b></td><td>${clienteCel(v)}</td><td>${resumoItens(v)}</td><td class="n">${valorVendaTxt(v)}</td><td>${quando[1](v)}</td>${FVD.entrega === "entregue" ? `<td>${fin(v)}</td>` : ""}
-    <td style="white-space:nowrap"><button type="button" class="small" data-acao="vd-abrir" data-id="${esc(v.id)}">Abrir</button>${acoes(v)}</td></tr>`).join("");
+  const linhas = lista.map(v => `<tr><td class="n"><b>${esc(v.numero_pedido)}</b></td><td class="vd-col-cli">${clienteCel(v)}</td><td class="vd-col-itens">${resumoItens(v)}</td><td class="n">${valorVendaTxt(v)}</td><td>${quando[1](v)}</td>${FVD.entrega === "entregue" ? `<td>${fin(v)}</td>` : ""}
+    <td class="vd-acao"><div class="vd-bts"><button type="button" class="small" data-acao="vd-abrir" data-id="${esc(v.id)}">Abrir</button>${acoes(v)}</div></td></tr>`).join("");
   return seg + `<div class="panel tabela"><table><thead><tr><th class="n">Pedido</th><th>Cliente e obra</th><th>Itens</th><th class="n">Valor</th><th>${quando[0]}</th>${FVD.entrega === "entregue" ? "<th>Card de cobrança</th>" : ""}<th></th></tr></thead><tbody>${linhas}</tbody></table>
     ${FVD.entrega === "entregando" ? `<p class="muted" style="margin:.75rem 0 0">Ao marcar como entregue, o Financeiro recebe um card para criar as cobranças do pedido.</p>` : ""}</div>`;
 }
@@ -2560,6 +2566,7 @@ function desenharVenda(v) {
     ${ro ? "" : `<div class="bloco" id="vd-editor">${editorItemHtml()}</div>`}
     ${blocoAnexo(v)}
     <div class="erro-campo" id="e-venda" role="alert"></div></form>`, true);
+  dlg.classList.add("vd-cheia");
   ligarAnexo();
   $("#f-venda").onsubmit = ev => { ev.preventDefault(); salvarVenda(); };
   if (!ro) { ["vd-cliente", "vd-contato", "vd-endereco"].forEach(i => $("#" + i).addEventListener("input", () => { VE.sujo = true; })); if (!v) $("#vd-cliente").focus(); }
@@ -2575,7 +2582,7 @@ function listaItensVenda() {
     const p = VD.produtos && VD.produtos.find(x => x.id === i.produto_id);
     return `<li${VE.ed === k ? ` class="vd-editando"` : ""}><span class="n" style="min-width:1.6rem"><b>${k + 1}.</b></span>${thumbVd(i.produto_id)}
       <span style="flex:1;min-width:0"><b>${esc(prodTxt(i))}</b>${!i.produto_id ? ` <span class="tag" title="Sem produto do cadastro: escolha a tipologia quando for o momento">sem ficha</span>` : ""}${p && !p.ativo ? ` <span class="muted">(inativo no cadastro)</span>` : ""}${i.produto_id && i.nome_orcamento && i.nome_orcamento !== i.produto_nome ? `<span class="muted" style="display:block;font-size:.85rem">No orçamento do software: ${esc(i.nome_orcamento)}</span>` : ""}<span class="muted" style="display:block;font-size:.88rem">${esc(medidasTxt(i))}</span><span style="display:block;font-size:.88rem">${esc(valorItemTxt(i))}</span>${i.observacao ? `<span style="display:block;font-size:.88rem;white-space:pre-wrap">Obs.: ${esc(i.observacao)}</span>` : ""}</span>
-      ${VE.leitura ? "" : `<span class="vd-bts"><button type="button" class="small" data-acao="vd-item-sobe" data-i="${k}" aria-label="Subir o item ${k + 1}"${k === 0 ? " disabled" : ""}>↑</button><button type="button" class="small" data-acao="vd-item-desce" data-i="${k}" aria-label="Descer o item ${k + 1}"${k === VE.itens.length - 1 ? " disabled" : ""}>↓</button>${i.produto_id ? "" : `<button type="button" class="small" data-acao="vd-item-vincular" data-i="${k}" title="Escolher o produto do cadastro para este item">Escolher produto</button>`}<button type="button" class="small" data-acao="vd-item-editar" data-i="${k}">Editar</button><button type="button" class="small" data-acao="vd-item-copiar" data-i="${k}" title="Repetir este item para mudar só as medidas">Repetir</button><button type="button" class="small danger" data-acao="vd-item-tirar" data-i="${k}" aria-label="Tirar o item ${k + 1}">Tirar</button></span>`}</li>`;
+      ${VE.leitura ? "" : `<span class="vd-bts"><span class="vd-ud"><button type="button" class="small" data-acao="vd-item-sobe" data-i="${k}" aria-label="Subir o item ${k + 1}"${k === 0 ? " disabled" : ""}>↑</button><button type="button" class="small" data-acao="vd-item-desce" data-i="${k}" aria-label="Descer o item ${k + 1}"${k === VE.itens.length - 1 ? " disabled" : ""}>↓</button></span>${i.produto_id ? "" : `<button type="button" class="small" data-acao="vd-item-vincular" data-i="${k}" title="Escolher o produto do cadastro para este item">Escolher produto</button>`}<button type="button" class="small" data-acao="vd-item-editar" data-i="${k}">Editar</button><button type="button" class="small" data-acao="vd-item-copiar" data-i="${k}" title="Repetir este item para mudar só as medidas">Repetir</button><button type="button" class="small danger" data-acao="vd-item-tirar" data-i="${k}" aria-label="Tirar o item ${k + 1}">Tirar</button></span>`}</li>`;
   }).join("")}</ol>`;
 }
 const sugestoesVd = campo => [...new Set([...VD.itens.map(i => i[campo]), ...VE.itens.map(i => i[campo])].filter(Boolean).map(s => String(s).trim()))].sort((a, b) => a.localeCompare(b, "pt-BR")).slice(0, 200);
