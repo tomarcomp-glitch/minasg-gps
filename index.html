@@ -316,6 +316,7 @@ const Api = (() => {
     if (/(column|schema cache)/i.test(m) && /(hora_prevista|hora_fim|campos|usa_financeiro|ordem|ativo)/i.test(m)) return "O banco ainda não recebeu a atualização 1. Rode o arquivo kanban_atualizacao_1.sql no Supabase.";
     if (/(servicos|motivos_parada|intervalos)/i.test(m) && /(schema cache|does not exist|relation|table)/i.test(m)) return "O banco ainda não recebeu a atualização 6. Rode o arquivo kanban_atualizacao_6.sql no Supabase.";
     if (/(produtos|produto_processos|salvar_produto)/i.test(m) && /(schema cache|does not exist|relation|table|function)/i.test(m)) return "O banco ainda não recebeu a atualização 7. Rode o arquivo kanban_atualizacao_7.sql no Supabase.";
+    if (/(venda_anexos|orc_total|registrar_anexo_venda|remover_anexo_venda|salvar_condicoes_venda)/i.test(m) && /(schema cache|does not exist|relation|Could not find)/i.test(m)) return "O banco ainda não recebeu a atualização 14. Rode o arquivo kanban_atualizacao_14.sql no Supabase.";
     if (/(vendas|venda_itens|venda_cartoes|salvar_venda|mudar_fase_venda|vendas_andamento)/i.test(m) && /(schema cache|does not exist|relation|Could not find)/i.test(m)) return "O banco ainda não recebeu a atualização 12. Rode o arquivo kanban_atualizacao_12.sql no Supabase.";
     if (/duplicate key/i.test(m)) return "Já existe um registro igual.";
     if (/JWT expired|invalid JWT/i.test(m)) return "Sessão expirada. Entre de novo.";
@@ -350,6 +351,22 @@ const Api = (() => {
     if (!r.ok) { const e = new Error(msgErro(j, r.status)); e.status = r.status; throw e; }
     return { dados: j };
   }
+  async function binar(caminho, { metodo = "GET", corpo, tipo } = {}, repetir = true) {
+    if (somenteLeitura && metodo !== "GET") throw new Error("Modo Ver como: só visualização. Volte ao modo administrador para fazer alterações.");
+    if (sess && sess.expira - Date.now() < 60000 && repetir) await renovar();
+    const h = { apikey: CFG.chave };
+    if (sess) h.Authorization = "Bearer " + sess.token;
+    if (tipo) h["Content-Type"] = tipo;
+    let r;
+    try { r = await fetch(CFG.url + caminho, { method: metodo, headers: h, body: corpo }); }
+    catch (e) { throw new Error("Sem conexão com o servidor. Verifique a internet e tente de novo."); }
+    if (r.status === 401 && sess && repetir) { await renovar(); return binar(caminho, { metodo, corpo, tipo }, false); }
+    if (!r.ok) {
+      let j = null; try { j = await r.json(); } catch (e) { j = null; }
+      const er = new Error(r.status === 404 ? "Arquivo não encontrado no servidor." : r.status === 413 ? "Arquivo grande demais (máximo 20 MB)." : msgErro(j, r.status)); er.status = r.status; throw er;
+    }
+    return metodo === "GET" ? await r.blob() : null;
+  }
   const ler = async (t, p) => (await chamar(`/rest/v1/${t}?${qs(p)}`)).dados || [];
   async function listar(t, p) {
     let tudo = [], desde = 0;
@@ -365,7 +382,7 @@ const Api = (() => {
     get logado() { return !!sess; },
     get uid() { return sess && sess.uid; },
     set somenteLeitura(v) { somenteLeitura = !!v; },
-    ler, listar,
+    ler, listar, bin: binar,
     inserir: async (t, corpo, query, prefer = "return=representation") => (await chamar(`/rest/v1/${t}${query ? "?" + qs(query) : ""}`, { metodo: "POST", corpo, cab: { Prefer: prefer } })).dados,
     alterar: async (t, filtros, corpo) => (await chamar(`/rest/v1/${t}?${qs(filtros)}`, { metodo: "PATCH", corpo, cab: { Prefer: "return=representation" } })).dados || [],
     apagar: async (t, filtros) => (await chamar(`/rest/v1/${t}?${qs(filtros)}`, { metodo: "DELETE", cab: { Prefer: "return=representation" } })).dados || [],
@@ -1340,7 +1357,7 @@ function desenharCartao() {
   abrir(`<form id="f-cartao" novalidate>
     <div class="barra-cartao"><h2>${CA.novo ? "Novo cartão" : esc(c.titulo)}</h2><div class="acoes">
       ${CA.novo || !pode ? "" : `<button type="button" class="small" data-acao="arquivar-cartao">${c.arquivado ? "Desarquivar" : "Arquivar"}</button>${admin() ? `<button type="button" class="small danger" data-acao="lixeira-cartao">Enviar para a lixeira</button>` : ""}`}
-      <button type="button" class="small" data-acao="fechar">Fechar</button>
+      ${CA.novo ? "" : verPedidoBtn(c)}<button type="button" class="small" data-acao="fechar">Fechar</button>
       ${pode ? `<button type="submit" class="small primary">${CA.novo ? "Criar cartão" : "Salvar cartão"}</button>` : ""}
     </div></div>
     ${CA.novo ? `<div class="field"><label for="f-area">Área</label><select id="f-area">${editaveis.map(q => opt(q.id, q.nome, c.quadro_id)).join("")}</select></div>` : (admin() && pode ? `<div class="field"><label for="f-area-mover">Área do cartão</label><select id="f-area-mover">${S.todosQuadros.filter(q => q.ativo !== false || q.id === c.quadro_id).map(q => opt(q.id, q.nome, c.quadro_id)).join("")}</select><div class="muted" style="font-size:.85rem">Ao trocar a área, as etiquetas saem e a categoria só fica se existir uma com o mesmo nome na área nova. Responsáveis, datas e histórico continuam.</div></div>` : `<p class="muted" style="margin-top:-.3rem">Área: ${esc(area.nome || "")}${pode ? "" : " (somente leitura)"}</p>`)}
@@ -2388,7 +2405,7 @@ const ETAPAS_ENTREGA = ["a_entregar", "entregando", "entregue"];
 const FVD = { aba: "orcamentos", entrega: "a_entregar", todos: false, busca: "", ...pref.ler("vendas", {}) };
 FVD.busca = "";
 const salvarFvd = () => pref.gravar("vendas", { aba: FVD.aba, entrega: FVD.entrega, todos: FVD.todos });
-const VD = { vendas: [], itens: [], and: [], semSql: false, produtos: null, desenhos: null, carregadoEm: 0, cache: false };
+const VD = { vendas: [], itens: [], and: [], anexos: [], semAnx: false, pdfjs: null, semSql: false, produtos: null, desenhos: null, carregadoEm: 0, cache: false };
 const areaVendas = () => S.todosQuadros.find(q => q.chave === "vendas") || S.quadros.find(q => q.chave === "vendas");
 const podeVerVendas = () => admin() || S.quadros.some(q => q.chave === "vendas");
 const podeEditarVendas = () => { const a = areaVendas(); return admin() || (!!a && podeEditar(a.id)); };
@@ -2404,7 +2421,7 @@ const valorTotalTxt = its => { const t = totalItens(its); if (!t.n || !t.algum) 
 const valorItemTxt = i => { const v = valorItem(i); return v === null ? "sem valor" : `${brl(v)} un. · subtotal ${brl(v * Number(i.quantidade || 0))}`; };
 const desenhoVd = id => id && VD.desenhos ? VD.desenhos.find(d => d.id === id) : null;
 const thumbVd = produtoId => { const p = VD.produtos && VD.produtos.find(x => x.id === produtoId); const d = p && desenhoVd(p.desenho_id); return d ? imgDesenho(d, THUMB) : `<div class="muted" style="${THUMB};display:flex;align-items:center;justify-content:center">—</div>`; };
-const msgVenda = e => /Could not find the function|salvar_venda|mudar_fase_venda/.test(e.message) && !/permissão|Item \d/.test(e.message) ? "O banco ainda não recebeu a atualização 12. Rode o arquivo kanban_atualizacao_12.sql no Supabase." : e.message;
+const msgVenda = e => /registrar_anexo_venda|remover_anexo_venda|salvar_condicoes_venda|venda_anexos|orc_total/.test(e.message) && /Could not find|schema cache|does not exist|relation/.test(e.message) ? "O banco ainda não recebeu a atualização 14. Rode o arquivo kanban_atualizacao_14.sql no Supabase." : /Could not find the function|salvar_venda|mudar_fase_venda/.test(e.message) && !/permissão|Item \d/.test(e.message) ? "O banco ainda não recebeu a atualização 12. Rode o arquivo kanban_atualizacao_12.sql no Supabase." : e.message;
 
 async function carregarVendas() {
   try {
@@ -2414,9 +2431,11 @@ async function carregarVendas() {
       Api.rpc("vendas_andamento")
     ]);
     VD.vendas = v; VD.itens = i; VD.and = a || []; VD.semSql = false;
+    try { VD.anexos = await Api.listar("venda_anexos", { select: "*", excluido_em: "is.null", order: "criado_em.asc,id.asc" }); VD.semAnx = false; }
+    catch (e) { if (!/atualização 14|venda_anexos|schema cache|does not exist|relation/i.test(e.message)) throw e; VD.anexos = []; VD.semAnx = true; }
   } catch (e) {
     if (!/atualização 12/.test(e.message)) throw e;
-    VD.semSql = true; VD.vendas = []; VD.itens = []; VD.and = [];
+    VD.semSql = true; VD.vendas = []; VD.itens = []; VD.and = []; VD.anexos = [];
   }
   VD.carregadoEm = Date.now();
 }
@@ -2428,7 +2447,7 @@ async function carregarProdutosVendas() {
   ]);
   VD.produtos = p; VD.desenhos = d;
 }
-const assinaturaVendas = () => VD.vendas.map(v => v.id + ":" + v.versao + ":" + v.fase).join(",") + "#" + VD.itens.length + "#" + VD.and.map(a => a.cartao_id + ":" + a.status + ":" + a.excluido + ":" + a.atualizado_em).join(",");
+const assinaturaVendas = () => VD.vendas.map(v => v.id + ":" + v.versao + ":" + v.fase).join(",") + "#" + VD.itens.length + "#" + VD.anexos.length + VD.vendas.map(v => v.orc_total).join(",") + "#" + VD.and.map(a => a.cartao_id + ":" + a.status + ":" + a.excluido + ":" + a.atualizado_em).join(",");
 
 function casaBusca(v) {
   const termos = norm(FVD.busca).split(/\s+/).filter(Boolean);
@@ -2444,7 +2463,7 @@ function andamentoTxt(v) {
   return `<b>${ok}</b> de ${cs.length} cards concluídos`;
 }
 const resumoItens = v => { const its = itensDaVenda(v.id); return `<b>${its.length}</b> ${its.length === 1 ? "item" : "itens"}<span class="muted" style="display:block;font-size:.85rem">${esc(curto(its.map(i => i.produto_nome + (i.quantidade > 1 ? " ×" + i.quantidade : "")).join("; "), 80))}</span>`; };
-const clienteCel = v => `<b>${esc(v.cliente)}</b>${v.contato ? `<span class="muted" style="display:block;font-size:.85rem">${esc(v.contato)}</span>` : ""}${v.endereco ? `<span class="muted" style="display:block;font-size:.85rem">${esc(curto(v.endereco, 70))}</span>` : ""}`;
+const clienteCel = v => `<b>${esc(v.cliente)}</b>${clipeTxt(v)}${v.contato ? `<span class="muted" style="display:block;font-size:.85rem">${esc(v.contato)}</span>` : ""}${v.endereco ? `<span class="muted" style="display:block;font-size:.85rem">${esc(curto(v.endereco, 70))}</span>` : ""}`;
 const quemQuando = (em, por) => em ? `${esc(horaBR(em))}${por ? `<span class="muted" style="display:block;font-size:.85rem">${esc(String(nomeDe(por)).split(" ")[0])}</span>` : ""}` : `<span class="muted">—</span>`;
 
 views.vendas = async () => {
@@ -2452,6 +2471,8 @@ views.vendas = async () => {
   if (VD.cache) VD.cache = false; else await carregarVendas();
   const sub = "Orçamento vira pedido; o pedido manda um card com todos os itens para o Gestor de Processos e Serviços. Quando os cards do pedido são concluídos, ele vai sozinho para a Entrega. Ao marcar Entregue, o Financeiro recebe um card para criar as cobranças.";
   if (VD.semSql) return cabecalho("Vendas", sub) + `<div class="panel vazio">O banco ainda não recebeu a atualização 12. Rode o arquivo <b>kanban_atualizacao_12.sql</b> no Supabase (SQL Editor) e recarregue esta tela.</div>`;
+  const alvo = (() => { const q = location.hash.split("?")[1]; return q ? new URLSearchParams(q).get("pedido") : null; })();
+  if (alvo) { history.replaceState(null, "", "#/vendas"); setTimeout(() => { if (VD.vendas.some(x => x.id === alvo)) abrirVenda(alvo); else aviso("Pedido não encontrado (ou você não tem acesso a Vendas).", "erro"); }, 0); }
   const ed = podeEditarVendas();
   const n = { orcamentos: VD.vendas.filter(v => v.fase === "orcamento").length, pedidos: VD.vendas.filter(v => v.fase === "pedido").length, entrega: VD.vendas.filter(v => v.fase === "a_entregar" || v.fase === "entregando").length };
   if (!["orcamentos", "pedidos", "entrega"].includes(FVD.aba)) FVD.aba = "orcamentos";
@@ -2469,7 +2490,7 @@ function tabelaOrcamentos(ed) {
   const lista = VD.vendas.filter(v => v.numero_orcamento && fases.includes(v.fase) && casaBusca(v)).sort((a, b) => b.numero_orcamento - a.numero_orcamento);
   if (!lista.length) return `<div class="panel vazio">${FVD.busca.trim() ? "Nada encontrado nesta busca." : `Nenhum orçamento em aberto.${ed ? " Use <b>Novo orçamento</b>." : ""}`}</div>`;
   const linhas = lista.map(v => `<tr${v.fase === "cancelado" ? ` style="opacity:.6"` : ""}>
-    <td class="n"><b>${esc(v.numero_orcamento)}</b></td><td>${clienteCel(v)}</td><td>${resumoItens(v)}</td><td class="n">${valorTotalTxt(itensDaVenda(v.id))}</td><td>${quemQuando(v.criado_em, v.criado_por)}</td>
+    <td class="n"><b>${esc(v.numero_orcamento)}</b></td><td>${clienteCel(v)}</td><td>${resumoItens(v)}</td><td class="n">${valorVendaTxt(v)}</td><td>${quemQuando(v.criado_em, v.criado_por)}</td>
     <td>${v.fase === "orcamento" ? `<span class="tag">Em aberto</span>` : v.fase === "cancelado" ? `<span class="tag t-perigo">Cancelado</span>` : `<span class="tag t-receber">Virou pedido ${esc(v.numero_pedido)}</span>`}</td>
     <td style="white-space:nowrap"><button type="button" class="small" data-acao="vd-abrir" data-id="${esc(v.id)}">Abrir</button>${ed && v.fase === "orcamento" ? ` <button type="button" class="small primary" data-acao="vd-transformar" data-id="${esc(v.id)}">Transformar em Pedido</button>` : ""}</td></tr>`).join("");
   return `<div class="panel tabela"><table><thead><tr><th class="n">Nº</th><th>Cliente</th><th>Itens</th><th class="n">Valor</th><th>Criado</th><th>Situação</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`;
@@ -2479,7 +2500,7 @@ function tabelaPedidos() {
   if (!lista.length) return `<div class="panel vazio">${FVD.busca.trim() ? "Nada encontrado nesta busca." : "Nenhum pedido em produção."}</div>`;
   const linhas = lista.map(v => {
     const c = cardsDaVenda(v.id, "producao").find(x => !x.excluido && S.quadros.some(q => q.nome === x.area));
-    return `<tr><td class="n"><b>${esc(v.numero_pedido)}</b>${v.numero_orcamento ? `<span class="muted" style="display:block;font-size:.8rem">orç. ${esc(v.numero_orcamento)}</span>` : ""}</td><td>${clienteCel(v)}</td><td>${resumoItens(v)}</td><td class="n">${valorTotalTxt(itensDaVenda(v.id))}</td><td>${andamentoTxt(v)}</td><td>${quemQuando(v.pedido_em, v.pedido_por)}</td>
+    return `<tr><td class="n"><b>${esc(v.numero_pedido)}</b>${v.numero_orcamento ? `<span class="muted" style="display:block;font-size:.8rem">orç. ${esc(v.numero_orcamento)}</span>` : ""}</td><td>${clienteCel(v)}</td><td>${resumoItens(v)}</td><td class="n">${valorVendaTxt(v)}</td><td>${andamentoTxt(v)}</td><td>${quemQuando(v.pedido_em, v.pedido_por)}</td>
       <td style="white-space:nowrap"><button type="button" class="small" data-acao="vd-abrir" data-id="${esc(v.id)}">Abrir</button>${c ? ` <button type="button" class="small" data-acao="vd-card" data-id="${esc(c.cartao_id)}">Ver card</button>` : ""}</td></tr>`;
   }).join("");
   return `<div class="panel tabela"><table><thead><tr><th class="n">Pedido</th><th>Cliente</th><th>Itens</th><th class="n">Valor</th><th>Andamento</th><th>Criado</th><th></th></tr></thead><tbody>${linhas}</tbody></table>
@@ -2500,7 +2521,7 @@ function tabelaEntrega(ed) {
     return "";
   };
   const fin = v => { const c = cardsDaVenda(v.id, "financeiro")[0]; return c ? `<span class="tag${c.status === "concluido" ? " t-receber" : ""}">${esc(STATUS[c.status] || c.status)}</span><span class="muted" style="display:block;font-size:.85rem">${esc(c.area)}${c.excluido ? " · na lixeira" : ""}</span>` : `<span class="muted">—</span>`; };
-  const linhas = lista.map(v => `<tr><td class="n"><b>${esc(v.numero_pedido)}</b></td><td>${clienteCel(v)}</td><td>${resumoItens(v)}</td><td class="n">${valorTotalTxt(itensDaVenda(v.id))}</td><td>${quando[1](v)}</td>${FVD.entrega === "entregue" ? `<td>${fin(v)}</td>` : ""}
+  const linhas = lista.map(v => `<tr><td class="n"><b>${esc(v.numero_pedido)}</b></td><td>${clienteCel(v)}</td><td>${resumoItens(v)}</td><td class="n">${valorVendaTxt(v)}</td><td>${quando[1](v)}</td>${FVD.entrega === "entregue" ? `<td>${fin(v)}</td>` : ""}
     <td style="white-space:nowrap"><button type="button" class="small" data-acao="vd-abrir" data-id="${esc(v.id)}">Abrir</button>${acoes(v)}</td></tr>`).join("");
   return seg + `<div class="panel tabela"><table><thead><tr><th class="n">Pedido</th><th>Cliente e obra</th><th>Itens</th><th class="n">Valor</th><th>${quando[0]}</th>${FVD.entrega === "entregue" ? "<th>Card de cobrança</th>" : ""}<th></th></tr></thead><tbody>${linhas}</tbody></table>
     ${FVD.entrega === "entregando" ? `<p class="muted" style="margin:.75rem 0 0">Ao marcar como entregue, o Financeiro recebe um card para criar as cobranças do pedido.</p>` : ""}</div>`;
@@ -2514,7 +2535,7 @@ async function abrirVenda(id, faseNova) {
   const v = id ? VD.vendas.find(x => x.id === id) : null;
   if (id && !v) { aviso("Registro não encontrado. Clique em Atualizar.", "erro"); return; }
   const fase = v ? v.fase : faseNova;
-  VE = { id: v ? v.id : null, fase, versao: v ? v.versao : null, itens: v ? itensDaVenda(v.id).map(i => ({ ...ITEM_VAZIO, ...i, vidro: i.vidro || "", cor: i.cor || "", observacao: i.observacao || "", valor_unitario: valorItem(i), valor_txt: "" })) : [], ed: null, novo: { ...ITEM_VAZIO }, sujo: false, leitura: !podeEditarVendas() || !["orcamento", "pedido"].includes(fase), busca: "" };
+  VE = { id: v ? v.id : null, fase, versao: v ? v.versao : null, itens: v ? itensDaVenda(v.id).map(i => ({ ...ITEM_VAZIO, ...i, vidro: i.vidro || "", cor: i.cor || "", observacao: i.observacao || "", valor_unitario: valorItem(i), valor_txt: "" })) : [], ed: null, novo: { ...ITEM_VAZIO }, sujo: false, pend: [], condSuja: false, leitura: !podeEditarVendas() || !["orcamento", "pedido"].includes(fase), busca: "" };
   desenharVenda(v);
 }
 function tituloVenda(v) {
@@ -2537,7 +2558,9 @@ function desenharVenda(v) {
     <div class="field"><label for="vd-endereco">Endereço da obra</label><input id="vd-endereco" type="text" maxlength="300" value="${esc(v ? v.endereco || "" : "")}" autocomplete="off"${dis}></div>
     <div class="bloco"><h3 id="vd-itens-tit">Itens (${VE.itens.length})</h3><div id="vd-itens">${listaItensVenda()}</div><div id="vd-total" class="vd-total">${totalFormTxt()}</div></div>
     ${ro ? "" : `<div class="bloco" id="vd-editor">${editorItemHtml()}</div>`}
+    ${blocoAnexo(v)}
     <div class="erro-campo" id="e-venda" role="alert"></div></form>`, true);
+  ligarAnexo();
   $("#f-venda").onsubmit = ev => { ev.preventDefault(); salvarVenda(); };
   if (!ro) { ["vd-cliente", "vd-contato", "vd-endereco"].forEach(i => $("#" + i).addEventListener("input", () => { VE.sujo = true; })); if (!v) $("#vd-cliente").focus(); }
 }
@@ -2621,18 +2644,29 @@ function payloadVenda() {
   return VE.itens.map(i => ({ produto_id: i.produto_id, quantidade: i.quantidade, largura: i.largura, altura: i.altura, vidro: i.vidro || null, cor: i.cor || null, observacao: i.observacao || null, valor_unitario: valorItem(i) }));
 }
 async function salvarVenda(depois) {
+  if (VE.leitura) return salvarAnexoCond();
   const erroEl = $("#e-venda"), cliente = $("#vd-cliente").value.trim();
   erroEl.textContent = "";
   if (cliente.length < 2) { erroEl.textContent = "Escreva o nome do cliente."; $("#vd-cliente").focus(); return false; }
   if (editorTemConteudo()) { erroEl.textContent = VE.ed !== null ? "Termine a edição do item: clique em Salvar item ou Cancelar edição." : "Há um item no editor que ainda não foi incluído: clique em Incluir item ou em Limpar."; return false; }
   if (!VE.itens.length) { erroEl.textContent = "Inclua pelo menos um item."; const b = $("#vd-busca-prod"); if (b) b.focus(); return false; }
+  const eCond = validarCondicoes(); if (eCond) { erroEl.textContent = eCond; return false; }
   const criarPedido = !VE.id && VE.fase === "pedido";
   if (criarPedido && !(await confirmar(`Criar o pedido de ${cliente} com ${pl(VE.itens.length, "item", "itens")}? Um card com todos os itens vai para o Backlog do Gestor de Processos e Serviços.`, "Criar pedido", false))) return false;
   const bts = $$('#f-venda .barra-cartao button'); bts.forEach(b => { b.disabled = true; });
   try {
     const id = await Api.rpc("salvar_venda", { p_id: VE.id, p_fase: VE.id ? null : VE.fase, p_cliente: cliente, p_contato: $("#vd-contato").value.trim() || null, p_endereco: $("#vd-endereco").value.trim() || null, p_itens: payloadVenda(), p_versao: VE.versao });
     const novo = !VE.id;
-    if (depois) { VE.id = id; await carregarVendas(); return id; }
+    VE.id = id;
+    const falhas = VD.semAnx ? [] : await gravarAnexosECondicoes(id);
+    if (falhas.length) {
+      try { await carregarVendas(); } catch (e2) { /* segue */ }
+      const vv = VD.vendas.find(x => x.id === id); if (vv) { VE.versao = vv.versao; VE.fase = vv.fase; }
+      VE.sujo = false; redesenharAnexos(); bts.forEach(b => { b.disabled = false; });
+      erroEl.textContent = "O " + (novo ? "orçamento/pedido foi criado" : "registro foi salvo") + ", mas nem tudo do orçamento do software foi gravado: " + falhas.join(" | ") + ". Corrija e clique em Salvar de novo.";
+      return false;
+    }
+    if (depois) { await carregarVendas(); return id; }
     VE = null; fechar(); aviso(criarPedido ? "Pedido criado. O card foi para o Gestor de Processos e Serviços." : novo ? "Orçamento criado." : "Alterações salvas."); render();
     return id;
   } catch (e) { erroEl.textContent = msgVenda(e); bts.forEach(b => { b.disabled = false; }); return false; }
@@ -2648,7 +2682,7 @@ async function transformarEmPedido(id, doFormulario) {
   const v = VD.vendas.find(x => x.id === id); if (!v) return;
   const n = itensDaVenda(id).length;
   if (!(await confirmar(`Transformar o orçamento nº ${v.numero_orcamento} (${v.cliente}) em pedido? Um card com ${pl(doFormulario ? VE.itens.length : n, "item", "itens")} vai para o Backlog do Gestor de Processos e Serviços.`, "Transformar em Pedido", false))) return;
-  if (doFormulario && VE.sujo) { const ok = await salvarVenda(true); if (!ok) return; }
+  if (doFormulario && (VE.sujo || VE.condSuja || (VE.pend || []).length)) { const ok = await salvarVenda(true); if (!ok) return; }
   if (await mudarFaseVenda(id, "pedido")) {
     if (doFormulario) { VE = null; fechar(); }
     await carregarVendas(); const p = VD.vendas.find(x => x.id === id);
@@ -2663,7 +2697,7 @@ async function acaoFaseLista(id, fase) {
   render();
 }
 async function fecharVenda() {
-  if (VE && VE.sujo && !VE.leitura && !(await confirmar("Fechar sem salvar? O que você mudou neste orçamento/pedido será perdido.", "Fechar sem salvar"))) return;
+  if (VE && (VE.sujo || VE.condSuja || (VE.pend || []).length) && !(await confirmar("Fechar sem salvar? O que você mudou neste orçamento/pedido será perdido.", "Fechar sem salvar"))) return;
   VE = null; fechar();
 }
 dlg.addEventListener("cancel", ev => { if (VE && $("#f-venda", dlg)) { ev.preventDefault(); fecharVenda(); } });
@@ -2680,8 +2714,14 @@ document.addEventListener("click", async ev => {
   else if (a === "vd-card") { try { if (!cartaoLocal(id)) await carregarQuadro(); } catch (e) { erro(e); return; } if (cartaoLocal(id)) abrirCartao(id); else aviso("Este card não aparece para você (área sem acesso ou na lixeira).", "erro"); }
   else if (a === "vd-transformar") transformarEmPedido(id, false);
   else if (a === "vd-fase") acaoFaseLista(id, el.dataset.fase);
+  else if (a === "vd-ver-pedido") { fechar(); location.hash = "#/vendas?pedido=" + id; }
   else if (!VE) return;
   else if (a === "vd-fechar") fecharVenda();
+  else if (a === "vd-anx-abrir") abrirAnexo(id);
+  else if (a === "vd-anx-tirar") tirarAnexo(id);
+  else if (a === "vd-anx-salvar") salvarAnexoCond();
+  else if (a === "vd-pend-tirar") { VE.pend.splice(Number(el.dataset.i), 1); redesenharAnexos(); }
+  else if (a === "vd-pend-ler") { const f = VE.pend[Number(el.dataset.i)]; if (f) lerPdfEPreencher(f, true); }
   else if (a === "vd-transformar-form") transformarEmPedido(VE.id, true);
   else if (a === "vd-cancelar-orc" || a === "vd-reabrir") {
     const can = a === "vd-cancelar-orc";
@@ -2710,15 +2750,18 @@ document.addEventListener("input", ev => {
   const t = ev.target;
   if (t.id === "vd-busca-prod" && VE) { VE.busca = t.value; const r = $("#vd-res"); if (r) r.innerHTML = resultadosProdutos(); return; }
   if (t.dataset && t.dataset.vd === "busca") { FVD.busca = t.value; clearTimeout(tBuscaVd); tBuscaVd = setTimeout(() => { VD.cache = true; render(); }, 250); return; }
+  if (VE && t.closest && t.closest("#vd-anx")) { VE.condSuja = true; if (t.id === "vd-c-total") atualizarComparaItens(); return; }
   if (VE && t.closest && t.closest("#vd-editor")) VE.sujo = true;
 });
 document.addEventListener("change", ev => {
   const t = ev.target;
+  if (t.id === "vd-arq" && VE) { escolherArquivos(t); return; }
   if (t.dataset && t.dataset.vd === "todos") { FVD.todos = t.checked; salvarFvd(); VD.cache = true; render(); }
 });
 document.addEventListener("keydown", ev => {
   if (ev.key !== "Enter" || !VE) return;
   const t = ev.target;
+  if (VE.leitura && t.closest && t.closest("#vd-anx") && t.tagName === "INPUT" && t.type !== "file") { ev.preventDefault(); salvarAnexoCond(); return; }
   if (!t.closest || !t.closest("#vd-editor") || t.tagName === "TEXTAREA" || t.tagName === "BUTTON") return;
   ev.preventDefault();
   if (t.id === "vd-busca-prod") { const b = $("#vd-res .vd-op"); if (b) escolherProduto(b.dataset.id); return; }
@@ -2732,6 +2775,266 @@ setInterval(async () => {
   try { await carregarVendas(); } catch (e) { return; }
   if (assinaturaVendas() !== antes && rotaAtual() === "vendas" && podeRenderizar()) { VD.cache = true; render(); }
 }, 5000);
+
+/* ---- orçamento do software: arquivo anexado e condições (atualização 14) ---- */
+const EXT_ANEXO = ["pdf", "png", "jpg", "jpeg", "webp", "xls", "xlsx", "csv", "doc", "docx"];
+const MAX_ANEXO = 20 * 1024 * 1024;
+const PDFJS_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+const PDFJS_WORKER = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+const anexosDaVenda = id => id ? VD.anexos.filter(a => a.venda_id === id) : [];
+const anxEditavel = v => podeEditarVendas() && !(v && v.fase === "cancelado") && !VD.semAnx;
+const tamanhoTxt = b => b == null ? "" : b < 1024 ? b + " B" : b < 1048576 ? Math.round(b / 1024) + " KB" : (b / 1048576).toFixed(1).replace(".", ",") + " MB";
+const extDe = nome => String(nome).split(".").length > 1 ? String(nome).split(".").pop().toLowerCase() : "";
+const nomeSeguro = nome => String(nome).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^_+|_+$/g, "").slice(-80) || "arquivo";
+const caminhoStorage = c => c.split("/").map(encodeURIComponent).join("/");
+
+/*PDF-INI*/
+const MOEDA_RX = /(?:R\$\s*:?\s*)?(\d{1,3}(?:\.\d{3})+|\d+),(\d{2})(?!\d)/g;
+const moedasDe = txt => [...String(txt).matchAll(MOEDA_RX)].map(m => Number(m[1].replace(/\./g, "") + "." + m[2]));
+const SO_VALOR_RX = /^(?:R\$\s*:?\s*)?(?:\d{1,3}(?:\.\d{3})+|\d+),\d{2}$/;
+function extrairCondicoes(linhasBrutas) {
+  const L = linhasBrutas.map(l => String(l).replace(/\s+/g, " ").trim()).filter(Boolean);
+  const S = L.map(l => l.replace(/^(?:\d+(?:\.\d+)*\s*[-–.)]\s*|[-–•]\s*)/, ""));
+  const limpa = t => t.replace(/^[\s:\-–]+/, "").replace(/[\s.;,]+$/, "").trim();
+  const r = {};
+  for (const l of S.slice(0, 25)) {
+    const m = l.match(/^cliente(?:\s*\/\s*projeto)?\s*:\s*(.+?)(?=\s*\(|\s+CPF\b|\s+Contato\b|\s+Fone\b|$)/i);
+    if (m && m[1].trim().length >= 2) { r.cliente = m[1].trim(); break; }
+  }
+  const prio = [[/total\s+geral/i, true], [/valor\s+total/i, false], [/total\s+(?:d[oa]\s+)?(?:or[cç]amento|pedido|projeto|servi[cç]o|proposta)/i, true], [/total\s+(?:l[ií]quido|a\s+pagar|final)/i, true]];
+  for (const [rx, proxima] of prio) {
+    const vals = [];
+    S.forEach((l, i) => {
+      if (/sub\s*-?\s*total/i.test(l)) return;
+      const m = l.match(rx); if (!m) return;
+      const resto = l.slice(m.index + m[0].length);
+      let v = moedasDe(resto);
+      if (!v.length && S[i + 1] && SO_VALOR_RX.test(S[i + 1])) v = moedasDe(S[i + 1]);
+      else if (!v.length && proxima && !/total/i.test(resto) && S[i + 1]) { const w = moedasDe(S[i + 1]); if (w.length) v = [w[w.length - 1]]; }
+      if (v.length) vals.push(v[0]);
+    });
+    if (vals.length) { r.total = vals[vals.length - 1]; break; }
+  }
+  if (r.total === undefined) {
+    const itens = S.filter(l => /^item\s+\d+\s*[-–]/i.test(l)).length;
+    const totais = [];
+    S.forEach(l => { const m = l.match(/(?:^|\s)total\s*:\s*(?:R\$\s*:?\s*)?((?:\d{1,3}(?:\.\d{3})+|\d+),\d{2})(?!\d)/i); if (m && !/sub\s*-?\s*total/i.test(l)) totais.push(Math.round(Number(m[1].replace(/\./g, "").replace(",", ".")) * 100)); });
+    if (itens && totais.length === itens) { r.total = totais.reduce((a, b) => a + b, 0) / 100; r.total_somado = true; }
+  }
+  if (r.total === undefined) {
+    const vals = [];
+    S.forEach((l, i) => {
+      if (/sub\s*-?\s*total/i.test(l)) return;
+      const m = l.match(/(?:^|[^a-zà-ú])total(?![a-zà-ú])/i); if (!m) return;
+      let v = moedasDe(l.slice(m.index + m[0].length));
+      if (!v.length && S[i + 1] && SO_VALOR_RX.test(S[i + 1])) v = moedasDe(S[i + 1]);
+      if (v.length) vals.push(v[0]);
+    });
+    if (vals.length) r.total = Math.max(...vals);
+  }
+  const VALOR = "((?:\\d{1,3}(?:\\.\\d{3})+|\\d+),\\d{2})(?!\\d)";
+  for (const l of S) {
+    let m = l.match(new RegExp("(?:entrada|sinal)[^\\d%]{0,40}(?:R\\$\\s*:?\\s*)?" + VALOR, "i"));
+    if (m) { r.entrada = Number(m[1].replace(/\./g, "").replace(",", ".")); break; }
+    m = l.match(/(\d{1,3})\s*%\s*(?:de\s*|no\s*|na\s*)?(?:entrada|sinal)/i) || l.match(/(?:entrada|sinal)\s*(?:de\s*)?(\d{1,3})\s*%/i);
+    if (m && r.total != null && Number(m[1]) > 0 && Number(m[1]) <= 100) { r.entrada = Math.round(r.total * Number(m[1])) / 100; break; }
+  }
+  const PAG = /^(?:forma(?:s)?\s+de\s+pagamento|condi[cç][aãõo]\w*\s+(?:de\s+)?pagamento|condi[cç][aãõo]\w*\s+comerciais?|pagamento)\b\s*:?/i;
+  for (let i = 0; i < S.length; i++) {
+    const m = S[i].match(PAG); if (!m) continue;
+    let t = limpa(S[i].slice(m[0].length));
+    if (/^pode\b/i.test(t)) continue;
+    const n = S[i + 1];
+    if (!t) { if (n && !/:\s*$/.test(n) && !/^[^:]{1,40}:/.test(n)) t = limpa(n); }
+    else if (n && n.length < 80 && !/:/.test(n) && /(parcela|\dx|boleto|cart[aã]o|pix|vista|dias|entrada)/i.test(n)) t += " " + limpa(n);
+    if (t) { r.pagamento = t.slice(0, 300); break; }
+  }
+  const PRZ = /^(?:prazo\s*(?:de\s*)?(?:entrega|execu[cç][aã]o|fabrica[cç][aã]o|instala[cç][aã]o)\b\s*:?|prazo\s*:|entrega(?:\s*\/\s*instala[cç][aã]o)?\s*:)/i;
+  for (let i = 0; i < S.length; i++) {
+    const m = S[i].match(PRZ); if (!m) continue;
+    let t = limpa(S[i].slice(m[0].length));
+    if (!t) {
+      const lista = [];
+      for (let k = i + 1; k < L.length && lista.length < 4 && /^\d+(?:\.\d+)*\s*[-–]\s*/.test(L[k]); k++) lista.push(limpa(S[k]));
+      t = lista.join("; ");
+    } else if (!/(\d|imediat|consultar|combinar)/i.test(t)) continue;
+    if (t) { r.prazo = t.slice(0, 300); break; }
+  }
+  for (const l of S) {
+    const mv = l.match(/^validade(?:\s+d[ao]\s+(?:proposta|or[cç]amento))?\b\s*:?(.*)$/i) || l.match(/(?:proposta|or[cç]amento|pedido)\s+v[aá]lid[oa]\s+(?:por|at[eé])\s+(.+)$/i);
+    const t = mv ? limpa(mv[1]) : "";
+    if (t && /\d/.test(t)) { r.validade = t.slice(0, 100); break; }
+  }
+  for (let i = 0; i < Math.min(S.length, 20); i++) {
+    const m = S[i].match(/(?:or[cç]amento|proposta|pedido)\s*(?:n[ºo°.]*|n[uú]mero|#)?\s*[:\-]?\s*((?:[A-Za-z]{1,4}-)?\d[\d./-]{0,20})/i);
+    if (m && !/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(m[1])) { r.numero_ext = m[1].replace(/[.\-/]+$/, ""); break; }
+    if (/(?:or[cç]amento|proposta|pedido)\s*n[ºo°.]*\s*:?\s*$/i.test(S[i]) && L[i + 1] && /^\d[\d./-]{0,20}$/.test(L[i + 1])) { r.numero_ext = L[i + 1]; break; }
+  }
+  return r;
+}
+/*PDF-FIM*/
+function carregarPdfJs() {
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if (VD.pdfjs) return VD.pdfjs;
+  VD.pdfjs = new Promise((ok, no) => {
+    const s = document.createElement("script");
+    s.src = PDFJS_URL;
+    s.onload = () => { try { window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER; ok(window.pdfjsLib); } catch (e) { VD.pdfjs = null; no(e); } };
+    s.onerror = () => { VD.pdfjs = null; no(new Error("Não consegui carregar o leitor de PDF (precisa de internet).")); };
+    document.head.appendChild(s);
+  });
+  return VD.pdfjs;
+}
+async function linhasDoPdf(file) {
+  const lib = await carregarPdfJs();
+  const doc = await lib.getDocument({ data: await file.arrayBuffer() }).promise;
+  const linhas = [];
+  for (let p = 1; p <= Math.min(doc.numPages, 15); p++) {
+    const conteudo = await (await doc.getPage(p)).getTextContent();
+    const grupos = [];
+    conteudo.items.forEach(it => {
+      if (!it.str || !it.str.trim()) return;
+      const y = it.transform[5], x = it.transform[4];
+      const g = grupos.find(k => Math.abs(k.y - y) < 2.5);
+      if (g) g.itens.push({ x, s: it.str }); else grupos.push({ y, itens: [{ x, s: it.str }] });
+    });
+    grupos.sort((a, b) => b.y - a.y).forEach(g => linhas.push(g.itens.sort((a, b) => a.x - b.x).map(i => i.s).join(" ")));
+  }
+  return linhas;
+}
+const CAMPOS_COND = [["vd-cliente", "cliente", "cliente"], ["vd-c-num", "numero_ext", "Nº no software"], ["vd-c-total", "total", "valor total"], ["vd-c-entrada", "entrada", "entrada"], ["vd-c-pag", "pagamento", "forma de pagamento"], ["vd-c-prazo", "prazo", "prazo de entrega"], ["vd-c-val", "validade", "validade"]];
+async function lerPdfEPreencher(file, sobrescrever) {
+  const msg = $("#vd-anx-msg"); if (!msg) return;
+  msg.textContent = `Lendo ${file.name}…`;
+  let r;
+  try {
+    const linhas = await linhasDoPdf(file);
+    if (!linhas.length) { msg.textContent = "Este PDF não tem texto (é imagem escaneada). Digite o valor e as condições."; return; }
+    r = extrairCondicoes(linhas);
+  } catch (e) { msg.textContent = "Não consegui ler o PDF: " + (e && e.message ? e.message : "arquivo inválido") + ". Digite o valor e as condições."; return; }
+  if (!$("#vd-c-total")) return;
+  const achou = [], faltou = [];
+  CAMPOS_COND.forEach(([id, k, rot]) => {
+    const el = $("#" + id);
+    if (r[k] == null) { if (k !== "cliente") faltou.push(rot); return; }
+    if (k === "cliente") { if (el && !el.disabled && !el.value.trim()) { el.value = r.cliente; VE.sujo = true; achou.push("cliente: " + r.cliente); } return; }
+    const txt = (k === "total" || k === "entrada") ? valorTxt(r[k]) : String(r[k]);
+    if (el.value.trim() && !sobrescrever) { if (el.value.trim() !== txt) achou.push(`${rot}: o PDF diz ${(k === "total" || k === "entrada") ? brl(r[k]) : txt} (mantive o que já estava)`); return; }
+    el.value = txt; achou.push(`${rot}: ${(k === "total" || k === "entrada") ? brl(r[k]) : txt}`);
+  });
+  VE.condSuja = true;
+  msg.innerHTML = achou.length ? `<b>Lido do PDF — confira antes de salvar:</b> ${esc(achou.join(" · "))}.${r.total_somado ? " O PDF não traz o valor total: somei o total de cada item." : ""}${faltou.length ? ` Não encontrei: ${esc(faltou.join(", "))}.` : ""}` : "Não encontrei valor nem condições neste PDF. Digite nos campos.";
+  atualizarComparaItens();
+}
+function lerCondicoes() {
+  const v = id => ($("#" + id) ? $("#" + id).value.trim() : "");
+  const total = lerValor(v("vd-c-total")), entrada = lerValor(v("vd-c-entrada"));
+  return { num: v("vd-c-num"), total, entrada, pag: v("vd-c-pag"), prazo: v("vd-c-prazo"), val: v("vd-c-val"), obs: v("vd-c-obs") };
+}
+function validarCondicoes() {
+  if (!$("#vd-c-total")) return "";
+  const c = lerCondicoes();
+  if (Number.isNaN(c.total) || (c.total !== null && c.total > 9999999999.99)) { $("#vd-c-total").focus(); return "Valor total do orçamento inválido. Use o formato 1.234,56 (ou deixe em branco)."; }
+  if (Number.isNaN(c.entrada) || (c.entrada !== null && c.entrada > 9999999999.99)) { $("#vd-c-entrada").focus(); return "Entrada inválida. Use o formato 1.234,56 (ou deixe em branco)."; }
+  return "";
+}
+function atualizarComparaItens() {
+  const el = $("#vd-c-compara"); if (!el) return;
+  const t = totalItens(VE.itens), c = lerValor(($("#vd-c-total") || {}).value);
+  el.textContent = t.algum && c !== null && !Number.isNaN(c) && Math.abs(c - t.total) > 0.005 ? `A soma dos itens digitados é ${brl(t.total)}; o valor total do orçamento é ${brl(c)}. No Financeiro vale o valor total do orçamento.` : "";
+}
+function listaAnexosHtml(v) {
+  const ed = anxEditavel(v), ex = anexosDaVenda(v ? v.id : null);
+  const lin = [];
+  ex.forEach(a => lin.push(`<li><span style="flex:1;min-width:0;overflow-wrap:anywhere"><b>${esc(a.nome)}</b><span class="muted" style="display:block;font-size:.85rem">${esc(tamanhoTxt(a.bytes))} · ${esc(horaBR(a.criado_em))} · ${esc(String(nomeDe(a.criado_por)).split(" ")[0])}</span></span><span class="vd-bts"><button type="button" class="small" data-acao="vd-anx-abrir" data-id="${esc(a.id)}">Abrir</button>${ed ? `<button type="button" class="small danger" data-acao="vd-anx-tirar" data-id="${esc(a.id)}">Tirar</button>` : ""}</span></li>`));
+  (VE.pend || []).forEach((f, i) => lin.push(`<li><span style="flex:1;min-width:0;overflow-wrap:anywhere"><b>${esc(f.name)}</b><span class="muted" style="display:block;font-size:.85rem">${esc(tamanhoTxt(f.size))} · será enviado ao salvar</span></span><span class="vd-bts">${extDe(f.name) === "pdf" ? `<button type="button" class="small" data-acao="vd-pend-ler" data-i="${i}" title="Lê o PDF de novo e troca o que está nos campos">Ler de novo</button>` : ""}<button type="button" class="small danger" data-acao="vd-pend-tirar" data-i="${i}">Tirar</button></span></li>`));
+  return lin.length ? `<ul class="vd-itens">${lin.join("")}</ul>` : `<div class="muted" style="padding:.4rem 0">Nenhum arquivo anexado.</div>`;
+}
+function blocoAnexo(v) {
+  if (VD.semAnx) return `<div class="bloco" id="vd-anx"><h3>Orçamento do software</h3><div class="muted">O banco ainda não recebeu a atualização 14. Rode o arquivo <b>kanban_atualizacao_14.sql</b> no Supabase para anexar o arquivo do orçamento e registrar valor e condições.</div></div>`;
+  const ed = anxEditavel(v), dis = ed ? "" : " disabled", c = v || {};
+  return `<div class="bloco" id="vd-anx"><h3>Orçamento do software (arquivo e condições)</h3>
+    <p class="muted" style="margin:0 0 .5rem;font-size:.9rem">Guarde aqui o orçamento feito no software. Se for PDF, o app lê o valor total e as condições e preenche os campos: confira sempre. O arquivo fica só neste ${v && v.numero_pedido ? "pedido" : "registro"}; o card do Financeiro leva as condições e o link do pedido.</p>
+    <div id="vd-anx-lista">${listaAnexosHtml(v)}</div>
+    ${ed ? `<div class="field"><label for="vd-arq">Anexar arquivo (PDF, imagem ou planilha, até 20 MB)</label><input id="vd-arq" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.xls,.xlsx,.csv,.doc,.docx" multiple></div>` : ""}
+    <div id="vd-anx-msg" class="muted" role="status" style="margin-bottom:.5rem"></div>
+    <div class="grade3"><div class="field"><label for="vd-c-num">Nº no software</label><input id="vd-c-num" type="text" maxlength="60" value="${esc(c.orc_numero_ext || "")}" autocomplete="off"${dis}></div>
+      <div class="field"><label for="vd-c-total">Valor total do orçamento (R$)</label><input id="vd-c-total" type="text" inputmode="decimal" maxlength="20" value="${esc(valorTxt(c.orc_total === undefined || c.orc_total === null ? null : Number(c.orc_total)))}" placeholder="Ex.: 18.500,50" autocomplete="off"${dis}></div>
+      <div class="field"><label for="vd-c-entrada">Entrada (R$)</label><input id="vd-c-entrada" type="text" inputmode="decimal" maxlength="20" value="${esc(valorTxt(c.orc_entrada === undefined || c.orc_entrada === null ? null : Number(c.orc_entrada)))}" autocomplete="off"${dis}></div></div>
+    <div id="vd-c-compara" class="muted" style="font-size:.88rem;margin:-.2rem 0 .5rem"></div>
+    <div class="field"><label for="vd-c-pag">Forma de pagamento</label><input id="vd-c-pag" type="text" maxlength="300" value="${esc(c.orc_pagamento || "")}" placeholder="Ex.: 50% de entrada + 3x no boleto" autocomplete="off"${dis}></div>
+    <div class="grade2"><div class="field"><label for="vd-c-prazo">Prazo de entrega</label><input id="vd-c-prazo" type="text" maxlength="300" value="${esc(c.orc_prazo || "")}" autocomplete="off"${dis}></div>
+      <div class="field"><label for="vd-c-val">Validade da proposta</label><input id="vd-c-val" type="text" maxlength="100" value="${esc(c.orc_validade || "")}" autocomplete="off"${dis}></div></div>
+    <div class="field"><label for="vd-c-obs">Observações das condições</label><textarea id="vd-c-obs" rows="2" maxlength="2000"${dis}>${esc(c.orc_obs || "")}</textarea></div>
+    ${ed ? (v ? `<div class="erro-campo" id="e-anx" role="alert"></div><button type="button" data-acao="vd-anx-salvar">Salvar arquivo e condições</button>` : `<div class="muted" style="font-size:.88rem">Será salvo junto com o orçamento.</div>`) : ""}</div>`;
+}
+function redesenharAnexos() { const l = $("#vd-anx-lista"); if (l) l.innerHTML = listaAnexosHtml(VE.id ? VD.vendas.find(x => x.id === VE.id) : null); }
+function ligarAnexo() { atualizarComparaItens(); }
+function escolherArquivos(inp) {
+  const msg = $("#vd-anx-msg"), erros = [], novos = [];
+  [...inp.files].forEach(f => {
+    if (!EXT_ANEXO.includes(extDe(f.name))) erros.push(`${f.name}: tipo não aceito (use PDF, imagem ou planilha)`);
+    else if (f.size > MAX_ANEXO) erros.push(`${f.name}: maior que 20 MB`);
+    else if (f.size === 0) erros.push(`${f.name}: arquivo vazio`);
+    else novos.push(f);
+  });
+  inp.value = "";
+  VE.pend = (VE.pend || []).concat(novos);
+  redesenharAnexos();
+  if (msg) msg.textContent = erros.join(" · ");
+  const pdf = novos.find(f => extDe(f.name) === "pdf");
+  if (pdf) lerPdfEPreencher(pdf, false);
+  else if (novos.length && msg && !erros.length) msg.textContent = "Arquivo anexado. A leitura automática só funciona em PDF: digite o valor e as condições.";
+}
+async function gravarAnexosECondicoes(id) {
+  const falhas = [];
+  for (const f of (VE.pend || []).slice()) {
+    try {
+      const cam = `${id}/${crypto.randomUUID()}-${nomeSeguro(f.name)}`;
+      await Api.bin(`/storage/v1/object/vendas-anexos/${caminhoStorage(cam)}`, { metodo: "POST", corpo: f, tipo: f.type || "application/octet-stream" });
+      await Api.rpc("registrar_anexo_venda", { p_venda: id, p_nome: f.name, p_caminho: cam, p_mime: f.type || null, p_bytes: f.size });
+      VE.pend = VE.pend.filter(x => x !== f);
+    } catch (e) { falhas.push(`${f.name}: ${msgVenda(e)}`); }
+  }
+  if ($("#vd-c-total")) {
+    const c = lerCondicoes();
+    try { await Api.rpc("salvar_condicoes_venda", { p_id: id, p_numero_ext: c.num || null, p_total: c.total, p_entrada: c.entrada, p_pagamento: c.pag || null, p_prazo: c.prazo || null, p_validade: c.val || null, p_obs: c.obs || null }); VE.condSuja = false; }
+    catch (e) { falhas.push("condições: " + msgVenda(e)); }
+  }
+  return falhas;
+}
+async function salvarAnexoCond() {
+  const er = $("#e-anx") || $("#e-venda"), bt = $('[data-acao="vd-anx-salvar"]');
+  er.textContent = "";
+  const e0 = validarCondicoes(); if (e0) { er.textContent = e0; return false; }
+  if (bt) bt.disabled = true;
+  const falhas = await gravarAnexosECondicoes(VE.id);
+  try { await carregarVendas(); } catch (e) { /* mostra o que deu */ }
+  const v = VD.vendas.find(x => x.id === VE.id); if (v && !VE.leitura) VE.versao = v.versao;
+  redesenharAnexos(); if (bt) bt.disabled = false;
+  if (falhas.length) { er.textContent = "Não salvou tudo: " + falhas.join(" | "); return false; }
+  aviso("Arquivo e condições salvos."); VE.condSuja = false;
+  return true;
+}
+async function abrirAnexo(id) {
+  const a = VD.anexos.find(x => x.id === id); if (!a) return;
+  const nova = window.open("", "_blank");
+  try {
+    const blob = await Api.bin(`/storage/v1/object/authenticated/vendas-anexos/${caminhoStorage(a.caminho)}`);
+    const url = URL.createObjectURL(blob.type ? blob : new Blob([blob], { type: a.tipo_mime || "application/octet-stream" }));
+    if (nova && /^(application\/pdf|image\/)/.test(a.tipo_mime || "")) nova.location.href = url;
+    else { if (nova) nova.close(); const l = document.createElement("a"); l.href = url; l.download = a.nome; document.body.appendChild(l); l.click(); l.remove(); }
+    setTimeout(() => URL.revokeObjectURL(url), 120000);
+  } catch (e) { if (nova) nova.close(); aviso(msgVenda(e), "erro"); }
+}
+async function tirarAnexo(id) {
+  const a = VD.anexos.find(x => x.id === id); if (!a) return;
+  if (!(await confirmar(`Tirar o arquivo “${a.nome}” deste registro? Ele deixa de aparecer aqui (fica guardado no servidor).`, "Tirar arquivo"))) return;
+  try { await Api.rpc("remover_anexo_venda", { p_anexo: id }); await carregarVendas(); redesenharAnexos(); aviso("Arquivo retirado."); } catch (e) { aviso(msgVenda(e), "erro"); }
+}
+const valorVendaTxt = v => v.orc_total !== null && v.orc_total !== undefined ? `<b>${esc(brl(v.orc_total))}</b><span class="muted" style="display:block;font-size:.8rem">orçamento do software</span>` : valorTotalTxt(itensDaVenda(v.id));
+const clipeTxt = v => { const n = anexosDaVenda(v.id).length; return n ? ` <span class="muted" title="${pl(n, "arquivo anexado", "arquivos anexados")}" aria-label="${pl(n, "arquivo anexado", "arquivos anexados")}">📎${n}</span>` : ""; };
+const verPedidoBtn = c => { const m = podeVerVendas() && String(c.descricao || "").match(/#\/vendas\?pedido=([0-9a-f-]{36})/); return m ? `<button type="button" class="small" data-acao="vd-ver-pedido" data-id="${m[1]}">Ver pedido</button>` : ""; };
 
 /* ===================== INSTALAÇÃO NO CELULAR (PWA) ===================== */
 let promptInstalar = null;
